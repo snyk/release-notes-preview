@@ -1,0 +1,15 @@
+name: semantic-release
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: semantic release
+      run: npx semantic-release
+      env:
+        GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_PREVIEW_GITHUB_TOKEN }}
