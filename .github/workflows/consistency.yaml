@@ -1,0 +1,13 @@
+name: consistency
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  assert-consistency:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: assert action updated
+      run: cmp -s $GITHUB_WORKSPACE/action.yaml $GITHUB_WORKSPACE/.github/workflows/release-notes.yaml
