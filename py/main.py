@@ -41,6 +41,8 @@ def main():
         '%s/comments' % issue['href'],
         headers=headers,
     ).json()
+
+    # TODO replace login & id for the details of the token
     commentIds = [
         comment['id'] for comment in allCommentsResponse
         if comment['user']['login'] == 'snyk-deployer'
@@ -71,7 +73,8 @@ def main():
     )
 
 def processCommits(commitsSinceLastVersion):
-    # TODO: handle reverts?
+    # TODO: handle reverts
+    # TODO: handle merges
     commits = {
         "features": [],
         "fixes": [],
