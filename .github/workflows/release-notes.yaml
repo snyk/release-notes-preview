@@ -2,7 +2,7 @@ name: Release-Notes-Preview
 
 on:
   pull_request:
-    branches: [ staging ]
+    branches: [ master ]
 
 jobs:
   preview:
