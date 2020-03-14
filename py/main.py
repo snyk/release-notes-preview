@@ -8,19 +8,33 @@ eventName = os.environ['GITHUB_EVENT_NAME']
 if eventName != 'pull_request':
     sys.exit(0)
 
+GITHUB_USERNAME = os.environ.get('GITHUB_USERNAME', 'USER_NOT_FOUND')
+GITHUB_OWNER_AND_REPO = os.environ['GITHUB_REPOSITORY']
+GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
+if not GITHUB_TOKEN:
+    print('GITHUB_TOKEN is missing')
+    sys.exit(1)
+
 eventPath = os.environ['GITHUB_EVENT_PATH']
 with open(eventPath) as f:
     eventData = json.loads(f.read())
-
-GIT_OWNER_AND_REPO = os.environ['GITHUB_REPOSITORY']
+    print('**************************')
+    print(eventData)
+    print('**************************')
 
 def main():
-    pullRequestNumber = eventData['number']
-
-    headers = {'Authorization': 'token ' + os.environ['GITHUB_TOKEN']}
+    headers = {'Authorization': 'token ' + GITHUB_TOKEN}
     # TODO error handling
-    pullRequest = requests.get('https://api.github.com/repos/{orgAndRepo}/pulls/{pr}'.format(orgAndRepo=GIT_OWNER_AND_REPO, pr=pullRequestNumber))
-    issue = pullRequest.json()['_links']['issue']
+    pullRequestUrl = eventData['pull_request']['url']
+    print(pullRequestUrl)
+    pullRequest = requests.get(pullRequestUrl)
+    pullRequestObject = pullRequest.json()
+    if 'message' in pullRequestObject and pullRequestObject['message'] == 'Not Found':
+        print('could not find this PR, weird stuff!', pullRequestUrl)
+        sys.exit(1)
+
+    print(pullRequestObject)
+    issue = pullRequestObject['_links']['issue']
 
     # get all existing comments for this issue/PR
     allCommentsResponse = requests.get(
@@ -37,7 +51,7 @@ def main():
     # delete old & irrelevant release notes previews
     for id in commentIds:
         requests.delete(
-            'https://api.github.com/repos/{orgAndRepo}/issues/comments/{commentId}'.format(orgAndRepo=GIT_OWNER_AND_REPO, commentId=id),
+            'https://api.github.com/repos/{orgAndRepo}/issues/comments/{commentId}'.format(orgAndRepo=GITHUB_OWNER_AND_REPO, commentId=id),
             headers=headers,
         )
 
@@ -82,9 +96,8 @@ def processCommits(commitsSinceLastVersion):
     return commits
 
 def getTextToPost(commits):
-    USERNAME = os.environ.get('USERNAME', 'USER_NOT_FOUND')
     textToPost = {
-        'title': 'Expected release notes (by @%s)' % USERNAME,
+        'title': 'Expected release notes (by @%s)' % GITHUB_USERNAME,
         'body': '',
     }
 
