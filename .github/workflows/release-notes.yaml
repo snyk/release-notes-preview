@@ -26,5 +26,5 @@ jobs:
     - name: Post release notes
       run: python $GITHUB_WORKSPACE/py/main.py
       env:
-        USERNAME: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_GITHUB_TOKEN }}
+        GITHUB_USERNAME: ${{ github.actor }}
+        GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_PREVIEW_GITHUB_TOKEN }}
