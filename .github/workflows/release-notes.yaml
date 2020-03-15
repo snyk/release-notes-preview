@@ -7,24 +7,18 @@ on:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8]
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
     - run: |
         git fetch --prune --unshallow --tags
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+    # TODO: cache node_modules
+    - run: |
+        npm i
+    - uses: ./
       with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests
-    - name: Post release notes
-      run: python $GITHUB_WORKSPACE/py/main.py
+        releaseBranch: master
+        githubPosterId: 18642669
       env:
         GITHUB_USERNAME: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_PREVIEW_GITHUB_TOKEN }}

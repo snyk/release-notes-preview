@@ -1,0 +1,36 @@
+{
+  "name": "release-notes-preview",
+  "description": "Presents a preview of expected release notes should the PR get merged, based on Semantic Release.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snyk/release-notes-preview.git"
+  },
+  "author": "Amir Moualem",
+  "bugs": {
+    "url": "https://github.com/snyk/release-notes-preview/issues"
+  },
+  "homepage": "https://github.com/snyk/release-notes-preview#readme",
+  "dependencies": {
+    "needle": "^2.3.3"
+  },
+  "release": {
+    "branches": "master",
+    "verifyConditions": [
+      "@semantic-release/github"
+    ],
+    "publish": [
+      "@semantic-release/github"
+    ],
+    "success": [
+      "@semantic-release/github"
+    ],
+    "fail": [
+      "@semantic-release/github"
+    ]
+  }
+}

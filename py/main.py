@@ -8,6 +8,14 @@ eventName = os.environ['GITHUB_EVENT_NAME']
 if eventName != 'pull_request':
     sys.exit(0)
 
+RELEASE_BRANCH = os.environ['INPUT_RELEASE_BRANCH']
+if not RELEASE_BRANCH:
+    print('INPUT_RELEASE_BRANCH is missing')
+    sys.exit(1)
+GITHUB_POSTER_ID = os.environ['INPUT_GITHUB_POSTER_ID']
+if not GITHUB_POSTER_ID:
+    print('INPUT_GITHUB_POSTER_ID is missing')
+    sys.exit(1)
 GITHUB_USERNAME = os.environ.get('GITHUB_USERNAME', 'USER_NOT_FOUND')
 GITHUB_OWNER_AND_REPO = os.environ['GITHUB_REPOSITORY']
 GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
@@ -45,8 +53,7 @@ def main():
     # TODO replace login & id for the details of the token
     commentIds = [
         comment['id'] for comment in allCommentsResponse
-        if comment['user']['login'] == 'snyk-deployer'
-        and comment['user']['id'] == 18642669
+        if comment['user']['id'] == 18642669
         and 'Expected release notes' in comment['body']
     ]
 
@@ -57,8 +64,8 @@ def main():
             headers=headers,
         )
 
-    # TODO: "master" needs to be parameterised
-    lastVersion = subprocess.check_output(['git', 'describe', '--abbrev=0', '--tags', 'origin/master'], text=True, stderr=subprocess.STDOUT).strip()
+    releaseBranchString = 'origin/%s' % RELEASE_BRANCH
+    lastVersion = subprocess.check_output(['git', 'describe', '--abbrev=0', '--tags', releaseBranchString], text=True, stderr=subprocess.STDOUT).strip()
     commitsSinceLastVersion = subprocess.check_output(['git', 'log', '--no-decorate', lastVersion + '..HEAD', '--oneline'], text=True).strip()
     commits = processCommits(commitsSinceLastVersion)
     if not (commits['features'] or commits['fixes']):
