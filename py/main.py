@@ -57,7 +57,8 @@ def main():
             headers=headers,
         )
 
-    lastVersion = subprocess.check_output(['git', 'describe', '--abbrev=0', '--tags', 'origin/staging'], text=True, stderr=subprocess.STDOUT).strip()
+    # TODO: "master" needs to be parameterised
+    lastVersion = subprocess.check_output(['git', 'describe', '--abbrev=0', '--tags', 'origin/master'], text=True, stderr=subprocess.STDOUT).strip()
     commitsSinceLastVersion = subprocess.check_output(['git', 'log', '--no-decorate', lastVersion + '..HEAD', '--oneline'], text=True).strip()
     commits = processCommits(commitsSinceLastVersion)
     if not (commits['features'] or commits['fixes']):
