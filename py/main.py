@@ -30,7 +30,7 @@ def main():
     pullRequest = requests.get(pullRequestUrl)
     pullRequestObject = pullRequest.json()
     if 'message' in pullRequestObject and pullRequestObject['message'] == 'Not Found':
-        print('could not find this PR, weird stuff!', pullRequestUrl)
+        print('could not find this PR, probably insufficient privileges on the token!', pullRequestUrl)
         sys.exit(1)
 
     print(pullRequestObject)
