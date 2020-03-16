@@ -2,5 +2,5 @@
   "plugins": [
     "@semantic-release/github"
   ],
-  "branches": "master"
+  "branches": "fix/inputs"
 }
