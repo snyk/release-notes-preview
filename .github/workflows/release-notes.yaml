@@ -20,5 +20,5 @@ jobs:
         releaseBranch: master
         githubPosterId: 18642669
       env:
-        GITHUB_USERNAME: ${{ github.actor }}
+        GITHUB_PR_USERNAME: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_PREVIEW_GITHUB_TOKEN }}

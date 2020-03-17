@@ -17,9 +17,11 @@
   },
   "homepage": "https://github.com/snyk/release-notes-preview#readme",
   "dependencies": {
+    "child-process-promise": "^2.2.1",
     "needle": "^2.3.3"
   },
   "devDependencies": {
+    "@types/child-process-promise": "^2.2.1",
     "@types/needle": "^2.0.4",
     "@types/node": "^13.9.1",
     "typescript": "^3.8.3"
