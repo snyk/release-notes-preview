@@ -314,12 +314,12 @@
         "signature": "3b7ee66f0fc447e9c6db2b8824a6cf9d90fe98d2623eee33e30c14f3e22ceda5"
       },
       "../src/config.ts": {
-        "version": "0ddbe0b3965f0b64809a6bc70f47ff189dc424cda05ae58e21d212435e5b464a",
-        "signature": "2782e63ac260c8378d1cd37a3c766b5e89e7e588155eee71a3d3b22f4bdd8859"
+        "version": "40f321c21193ebd72166f4a2d302273c6f65b7230ff868fc3fcc93b0c4814e62",
+        "signature": "8c4b7f94ddf84526f305c41e27f82c06a3230c6dc0e6c75763129e11129c21df"
       },
       "../src/comment.ts": {
-        "version": "116fdb624201b58cd716a335516f851648bac031b8c2814b911e7a620226184b",
-        "signature": "049479754c13a674b3ec824a3a16d251f5b6dd9b8f28f4bd8ae3fdf937c57cd9"
+        "version": "aa5ecb8c6f659b20e42a23b874531adc9c8a837c9a424bd6ece9eb7ba5b5fedb",
+        "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
       },
       "../node_modules/@types/child-process-promise/index.d.ts": {
         "version": "57a8223e715ae455cbd8324b54458c1da1065471b73d0278ba9d5b29541d602b",
@@ -338,7 +338,7 @@
         "signature": "a4926a5d72f5b3053cccf6dd6ba3f1f1d70431910de3e5890fc367554b98a7ed"
       },
       "../src/index.ts": {
-        "version": "5e001caa32d02f184a957893145e4ccf6522322ac75c8c3ddc88917fc9aea448",
+        "version": "a0a040197410f7ff237c18484130c2407eeb82c5739085ecb0c485ca62c56bed",
         "signature": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
       }
     },
@@ -1453,12 +1453,12 @@
       "../node_modules/@types/node/ts3.2/index.d.ts",
       "../node_modules/@types/needle/index.d.ts",
       "../src/config.ts",
-      "../src/comment.ts",
       "../node_modules/@types/child-process-promise/index.d.ts",
       "../src/types.ts",
+      "../src/commit.ts",
       "../src/compose.ts",
       "../src/index.ts",
-      "../src/commit.ts"
+      "../src/comment.ts"
     ]
   },
   "version": "3.8.3"
