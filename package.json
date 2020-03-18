@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
-    "release": "ncc build && git add -f dist/"
+    "build": "tsc && ncc build && git add -f dist/"
   },
   "repository": {
     "type": "git",
