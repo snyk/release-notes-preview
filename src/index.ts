@@ -22,6 +22,9 @@ async function main() {
   const eventObj = JSON.parse(eventData);
   // console.log(eventObj);
 
+  const issueUrl = eventObj.pull_request.issue_url;
+  await comment.deleteExistingComments(issueUrl);
+
   const commitsData = await commit.getCommits();
   const message = compose.previewFromCommits(commitsData);
   if (!message) {
@@ -29,9 +32,6 @@ async function main() {
     process.exit(0);
   }
 
-  // TODO: list all comments
-  // TODO: delete all relevant comments
-  const issueUrl = eventObj.pull_request.issue_url;
   comment.postComment(issueUrl, message);
 }
 

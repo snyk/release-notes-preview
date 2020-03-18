@@ -19,15 +19,14 @@ async function main() {
     const eventData = fs.readFileSync(eventPath, 'utf8');
     const eventObj = JSON.parse(eventData);
     // console.log(eventObj);
+    const issueUrl = eventObj.pull_request.issue_url;
+    await comment.deleteExistingComments(issueUrl);
     const commitsData = await commit.getCommits();
     const message = compose.previewFromCommits(commitsData);
     if (!message) {
         console.log('no relevant changes detected, exiting gracefully');
         process.exit(0);
     }
-    // TODO: list all comments
-    // TODO: delete all relevant comments
-    const issueUrl = eventObj.pull_request.issue_url;
     comment.postComment(issueUrl, message);
 }
 main();
