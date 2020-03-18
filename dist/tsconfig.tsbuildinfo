@@ -334,7 +334,7 @@
         "signature": "dfa1b07ec47e1bbdb8b80f4eac4320a04330d2cce41cc13c028c87cbe6ab8a3d"
       },
       "../src/compose.ts": {
-        "version": "661ce3ff017611b62416273dafc8f3346317dfd67c8e74cc31ad0ff6c572d5c1",
+        "version": "2e3e654a5393b5c3449b9a8a95c8466ef22abd7f11f29b6626525cff355be93d",
         "signature": "a4926a5d72f5b3053cccf6dd6ba3f1f1d70431910de3e5890fc367554b98a7ed"
       },
       "../src/index.ts": {
@@ -1453,12 +1453,12 @@
       "../node_modules/@types/node/ts3.2/index.d.ts",
       "../node_modules/@types/needle/index.d.ts",
       "../src/config.ts",
+      "../src/comment.ts",
       "../node_modules/@types/child-process-promise/index.d.ts",
       "../src/types.ts",
       "../src/commit.ts",
-      "../src/compose.ts",
       "../src/index.ts",
-      "../src/comment.ts"
+      "../src/compose.ts"
     ]
   },
   "version": "3.8.3"

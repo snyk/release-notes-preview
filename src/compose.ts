@@ -20,7 +20,7 @@ export function previewFromCommits(commitsData: ICommitData): string {
     body += '\n_fixes_:\n' + commitsData.fix.join('\n') + '\n';
   }
   if (commitsData.others.length > 0) {
-    body += '\n_others (will not be included in Semantic-Release notes)_:\n' + commitsData.feat.join('\n');
+    body += '\n_others (will not be included in Semantic-Release notes)_:\n' + commitsData.others.join('\n');
   }
 
   return `${title}\n${body}`;
