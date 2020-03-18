@@ -1,3 +1,5 @@
+[![Known Vulnerabilities](https://snyk.io/test/github/snyk/release-notes-preview/badge.svg?targetFile=package.json)](https://snyk.io/test/github/snyk/release-notes-preview?targetFile=package.json)
+
 # snyk/release-notes-preview #
 
 ## Summary ##
