@@ -314,11 +314,11 @@
         "signature": "3b7ee66f0fc447e9c6db2b8824a6cf9d90fe98d2623eee33e30c14f3e22ceda5"
       },
       "../src/config.ts": {
-        "version": "40f321c21193ebd72166f4a2d302273c6f65b7230ff868fc3fcc93b0c4814e62",
-        "signature": "8c4b7f94ddf84526f305c41e27f82c06a3230c6dc0e6c75763129e11129c21df"
+        "version": "6c47ec08cc4baac56d830746762253e2d9d5a1e0015844d741b55139992d4b9b",
+        "signature": "c9b3a135c2ac448ec950a9905e2d9d21fa24da06fd8610429f78f418e6502592"
       },
       "../src/comment.ts": {
-        "version": "aa5ecb8c6f659b20e42a23b874531adc9c8a837c9a424bd6ece9eb7ba5b5fedb",
+        "version": "f32b1715c3247fbedf37cdb591f2edca3bab5f1ba97bd1a3e0e572195e06e7a3",
         "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
       },
       "../node_modules/@types/child-process-promise/index.d.ts": {

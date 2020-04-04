@@ -7,9 +7,6 @@ inputs:
     description: 'Branch where the Semantic Release will occur.'
     required: false
     default: 'master'
-  githubPosterId:
-    description: 'ID of the user associated with the GITHUB_TOKEN. Used to delete previous release notes previews so we dont spam pull requests.'
-    required: true
 
 runs:
   using: node12
