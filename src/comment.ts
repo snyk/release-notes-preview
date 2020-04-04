@@ -23,12 +23,13 @@ export async function deleteExistingComments(issueUrl: string): Promise<void> {
   const listCommentsUrl = `${issueUrl}/comments`;
   const payload = null;
 
+  const userId = await getPosterId();
   const commentsResponse = await needle('get', listCommentsUrl, payload, options);
   const comments = commentsResponse.body;
 
   const deleteRequests: any[] = [];
   for (const comment of comments) {
-    if (comment.user.id !== config.GITHUB_POSTER_ID) {
+    if (comment.user.id !== userId) {
       continue;
     }
     const deleteUrl = comment.url;
@@ -40,4 +41,10 @@ export async function deleteExistingComments(issueUrl: string): Promise<void> {
   // TODO: throttle if needed
   // right now it is expected that no more than 1 request will be present
   await Promise.all(deleteRequests);
+}
+
+async function getPosterId(): Promise<number> {
+  const payload = null;
+  const response = await needle('get', 'https://api.github.com/user', payload, options);
+  return response.body.id;
 }

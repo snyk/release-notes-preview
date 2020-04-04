@@ -8,14 +8,12 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     steps:
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
     - run: |
         git fetch --prune --unshallow --tags
     - uses: ./
       with:
         releaseBranch: master
-        githubPosterId: 18642669
       env:
         GITHUB_PR_USERNAME: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_PREVIEW_GITHUB_TOKEN }}
