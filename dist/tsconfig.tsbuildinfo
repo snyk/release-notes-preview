@@ -322,7 +322,7 @@
         "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
       },
       "../src/commit-status.ts": {
-        "version": "4ff780414ec4631f53f29b45965ac8405a5deb421a3f540481deb66608aff044",
+        "version": "30a9286fde3c1c35c7fda110e521aa7ad6668af230d1777b84cf909324ed7b55",
         "signature": "f227527421965dc28e49849f124e5458cad87d33405f64e1c86329f5209d05bd"
       },
       "../node_modules/@types/child-process-promise/index.d.ts": {
@@ -947,6 +947,7 @@
         "../node_modules/@types/node/ts3.2/util.d.ts"
       ],
       "../src/commit-status.ts": [
+        "../src/config.ts",
         "../node_modules/@types/node/fs.d.ts",
         "../node_modules/@types/node/ts3.2/fs.d.ts",
         "../node_modules/@types/node/util.d.ts",

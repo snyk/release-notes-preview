@@ -1737,6 +1737,7 @@ module.exports = config;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+const config = __webpack_require__(145);
 async function commitStatusPending(url) {
     await postCommitStatus(url, 'pending', 'awaiting release notes review');
 }
@@ -1746,7 +1747,6 @@ async function commitStatusSuccess(url) {
 }
 exports.commitStatusSuccess = commitStatusSuccess;
 async function postCommitStatus(url, state, description) {
-    const config = __webpack_require__(145);
     const options = {
         json: true,
         compressed: true,
@@ -1759,8 +1759,10 @@ async function postCommitStatus(url, state, description) {
         description,
         context: 'Release Notes Confirmation',
     };
+    console.log(`sending commit status ${state} to ${url}`);
     const needle = __webpack_require__(219);
     await needle('post', url, statusPayload, options);
+    console.log('commit status sent');
 }
 //# sourceMappingURL=commit-status.js.map
 
