@@ -1737,6 +1737,14 @@ module.exports = config;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+async function commitStatusPending(url) {
+    await postCommitStatus(url, 'pending', 'awaiting release notes review');
+}
+exports.commitStatusPending = commitStatusPending;
+async function commitStatusSuccess(url) {
+    await postCommitStatus(url, 'success', 'release notes reviewed');
+}
+exports.commitStatusSuccess = commitStatusSuccess;
 async function postCommitStatus(url, state, description) {
     const config = __webpack_require__(145);
     const options = {
@@ -1754,7 +1762,6 @@ async function postCommitStatus(url, state, description) {
     const needle = __webpack_require__(219);
     await needle('post', url, statusPayload, options);
 }
-exports.postCommitStatus = postCommitStatus;
 //# sourceMappingURL=commit-status.js.map
 
 /***/ }),
@@ -5563,10 +5570,11 @@ async function handlePullRequest(eventObj) {
     const message = compose.previewFromCommits(commitsData);
     if (!message) {
         console.log('no relevant changes detected, exiting gracefully');
+        await commit_status_1.commitStatusSuccess(eventObj.pull_request.statuses_url);
         process.exit(0);
     }
     comment.postComment(issueUrl, message);
-    await commit_status_1.postCommitStatus(eventObj.pull_request.statuses_url, 'pending', 'awaiting release notes review');
+    await commit_status_1.commitStatusPending(eventObj.pull_request.statuses_url);
 }
 exports.handlePullRequest = handlePullRequest;
 //# sourceMappingURL=pull-request.js.map
@@ -5601,7 +5609,7 @@ async function handleIssueComment(eventObj) {
     };
     const pullRequest = await needle('get', eventObj.issue.pull_request.url, null, options);
     const statusesUrl = pullRequest.body.statuses_url;
-    await commit_status_1.postCommitStatus(statusesUrl, 'success', 'release notes reviewed');
+    await commit_status_1.commitStatusSuccess(statusesUrl);
 }
 exports.handleIssueComment = handleIssueComment;
 //# sourceMappingURL=issue-comment.js.map

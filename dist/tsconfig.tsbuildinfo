@@ -322,8 +322,8 @@
         "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
       },
       "../src/commit-status.ts": {
-        "version": "93786c250ace784016ba877b7b0ca21e5fea75881c7884d15388eceab92a5a83",
-        "signature": "a547c78452751556e267d0d2ecdb5ffbe9e6525be4758681e310223a402de89d"
+        "version": "4ff780414ec4631f53f29b45965ac8405a5deb421a3f540481deb66608aff044",
+        "signature": "f227527421965dc28e49849f124e5458cad87d33405f64e1c86329f5209d05bd"
       },
       "../node_modules/@types/child-process-promise/index.d.ts": {
         "version": "57a8223e715ae455cbd8324b54458c1da1065471b73d0278ba9d5b29541d602b",
@@ -342,11 +342,11 @@
         "signature": "a4926a5d72f5b3053cccf6dd6ba3f1f1d70431910de3e5890fc367554b98a7ed"
       },
       "../src/pull-request.ts": {
-        "version": "eb12ca16cce0a19210873fe992ee8dc3c9d5eff5b814910870fbde4e88044874",
+        "version": "c399ec622f2b88f364a4b62c7f88b66c13dce8948e648be8612e98a882830b60",
         "signature": "81fa54f07a54731bb2a56bd17a1d1a487202ca33fa1592fa830ed383b74fa728"
       },
       "../src/issue-comment.ts": {
-        "version": "a501167347d1b6ec8e2afc523e468ddc2933ecdab89b32d6ad28a4d58bab7157",
+        "version": "fab3ccc6cd62f47d17574e920b0007d6163c860bf382af2e465a294f68b1d802",
         "signature": "3d38e46868145e055670bb1f44e2a0db091a6e630e5cc61f40bf767391bed1ee"
       },
       "../src/index.ts": {

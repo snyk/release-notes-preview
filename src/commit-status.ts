@@ -1,5 +1,20 @@
+export async function commitStatusPending(url: string): Promise<void> {
+  await postCommitStatus(
+    url,
+    'pending',
+    'awaiting release notes review',
+  );
+}
 
-export async function postCommitStatus(
+export async function commitStatusSuccess(url: string): Promise<void> {
+  await postCommitStatus(
+    url,
+    'success',
+    'release notes reviewed',
+  );
+}
+
+async function postCommitStatus(
   url: string,
   state: string,
   description: string,
