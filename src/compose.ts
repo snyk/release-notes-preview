@@ -23,5 +23,8 @@ export function previewFromCommits(commitsData: ICommitData): string {
     body += '\n_others (will not be included in Semantic-Release notes)_:\n' + commitsData.others.join('\n');
   }
 
+  // TODO probably make this configurable
+  body += '\n' + config.ACKNOWLEDGEMENT.UNCHECKED;
+
   return `${title}\n${body}`;
 }
