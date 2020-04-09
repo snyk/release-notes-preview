@@ -25,6 +25,8 @@ name: Release-Notes-Preview
 on:
   pull_request:
     branches: [ master ]
+  issue_comment:
+    types: [ edited ]
 
 jobs:
   preview:
@@ -33,7 +35,7 @@ jobs:
     - uses: actions/checkout@v2
     - run: |
         git fetch --prune --unshallow --tags
-    - uses: snyk/release-notes-preview@v1.3.5
+    - uses: snyk/release-notes-preview@v1.5.2
       with:
         releaseBranch: master
       env:
