@@ -314,12 +314,16 @@
         "signature": "3b7ee66f0fc447e9c6db2b8824a6cf9d90fe98d2623eee33e30c14f3e22ceda5"
       },
       "../src/config.ts": {
-        "version": "6c47ec08cc4baac56d830746762253e2d9d5a1e0015844d741b55139992d4b9b",
-        "signature": "c9b3a135c2ac448ec950a9905e2d9d21fa24da06fd8610429f78f418e6502592"
+        "version": "8af468db46b0311b4a4174583c5deaaa6a073d2d737327e120585b2deb5e1964",
+        "signature": "2cd4d7946ffdc2d4a4abddfc4392c1a2b001ad203edccc482fe463906251ca88"
       },
       "../src/comment.ts": {
         "version": "f32b1715c3247fbedf37cdb591f2edca3bab5f1ba97bd1a3e0e572195e06e7a3",
         "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
+      },
+      "../src/commit-status.ts": {
+        "version": "93786c250ace784016ba877b7b0ca21e5fea75881c7884d15388eceab92a5a83",
+        "signature": "a547c78452751556e267d0d2ecdb5ffbe9e6525be4758681e310223a402de89d"
       },
       "../node_modules/@types/child-process-promise/index.d.ts": {
         "version": "57a8223e715ae455cbd8324b54458c1da1065471b73d0278ba9d5b29541d602b",
@@ -334,11 +338,19 @@
         "signature": "dfa1b07ec47e1bbdb8b80f4eac4320a04330d2cce41cc13c028c87cbe6ab8a3d"
       },
       "../src/compose.ts": {
-        "version": "2e3e654a5393b5c3449b9a8a95c8466ef22abd7f11f29b6626525cff355be93d",
+        "version": "bca8b45ace798c7dbc94eb6206d7cda0aba1222e770497d98056d236d7253a25",
         "signature": "a4926a5d72f5b3053cccf6dd6ba3f1f1d70431910de3e5890fc367554b98a7ed"
       },
+      "../src/pull-request.ts": {
+        "version": "eb12ca16cce0a19210873fe992ee8dc3c9d5eff5b814910870fbde4e88044874",
+        "signature": "81fa54f07a54731bb2a56bd17a1d1a487202ca33fa1592fa830ed383b74fa728"
+      },
+      "../src/issue-comment.ts": {
+        "version": "a501167347d1b6ec8e2afc523e468ddc2933ecdab89b32d6ad28a4d58bab7157",
+        "signature": "3d38e46868145e055670bb1f44e2a0db091a6e630e5cc61f40bf767391bed1ee"
+      },
       "../src/index.ts": {
-        "version": "a0a040197410f7ff237c18484130c2407eeb82c5739085ecb0c485ca62c56bed",
+        "version": "f067ad674a055b9b7963d7672d30056dd2a8b65ea20914cc1ff3010ec86fc3d5",
         "signature": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
       }
     },
@@ -934,6 +946,12 @@
         "../node_modules/@types/node/util.d.ts",
         "../node_modules/@types/node/ts3.2/util.d.ts"
       ],
+      "../src/commit-status.ts": [
+        "../node_modules/@types/node/fs.d.ts",
+        "../node_modules/@types/node/ts3.2/fs.d.ts",
+        "../node_modules/@types/node/util.d.ts",
+        "../node_modules/@types/node/ts3.2/util.d.ts"
+      ],
       "../node_modules/@types/child-process-promise/index.d.ts": [
         "../node_modules/@types/node/child_process.d.ts",
         "../node_modules/@types/node/ts3.2/index.d.ts",
@@ -965,11 +983,28 @@
         "../node_modules/@types/node/util.d.ts",
         "../node_modules/@types/node/ts3.2/util.d.ts"
       ],
-      "../src/index.ts": [
-        "../node_modules/@types/node/fs.d.ts",
+      "../src/pull-request.ts": [
         "../src/comment.ts",
         "../src/commit.ts",
         "../src/compose.ts",
+        "../src/commit-status.ts",
+        "../node_modules/@types/node/fs.d.ts",
+        "../node_modules/@types/node/ts3.2/fs.d.ts",
+        "../node_modules/@types/node/util.d.ts",
+        "../node_modules/@types/node/ts3.2/util.d.ts"
+      ],
+      "../src/issue-comment.ts": [
+        "../src/config.ts",
+        "../src/commit-status.ts",
+        "../node_modules/@types/node/fs.d.ts",
+        "../node_modules/@types/node/ts3.2/fs.d.ts",
+        "../node_modules/@types/node/util.d.ts",
+        "../node_modules/@types/node/ts3.2/util.d.ts"
+      ],
+      "../src/index.ts": [
+        "../node_modules/@types/node/fs.d.ts",
+        "../src/pull-request.ts",
+        "../src/issue-comment.ts",
         "../node_modules/@types/node/ts3.2/fs.d.ts",
         "../node_modules/@types/node/util.d.ts",
         "../node_modules/@types/node/ts3.2/util.d.ts"
@@ -1602,10 +1637,13 @@
       "../node_modules/@types/needle/index.d.ts",
       "../src/config.ts",
       "../src/comment.ts",
+      "../src/commit-status.ts",
       "../node_modules/@types/child-process-promise/index.d.ts",
       "../src/types.ts",
       "../src/commit.ts",
       "../src/compose.ts",
+      "../src/pull-request.ts",
+      "../src/issue-comment.ts",
       "../src/index.ts",
       "../node_modules/typescript/lib/lib.es2015.d.ts",
       "../node_modules/typescript/lib/lib.es2016.d.ts",

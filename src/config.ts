@@ -13,9 +13,13 @@ if (!initialConfig.RELEASE_BRANCH) {
 }
 
 const config = {
-  GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-  RELEASE_BRANCH: process.env.INPUT_RELEASEBRANCH,
+  GITHUB_TOKEN: process.env.GITHUB_TOKEN!,
+  RELEASE_BRANCH: process.env.INPUT_RELEASEBRANCH!,
   GITHUB_PR_USERNAME: process.env.GITHUB_PR_USERNAME,
+  ACKNOWLEDGEMENT: {
+    CHECKED: '- [x] I hereby acknowledge these release notes are 🥙 AWESOME 🥙',
+    UNCHECKED: '- [ ] I hereby acknowledge these release notes are 🥙 AWESOME 🥙',
+  }
 }
 
 export = config;

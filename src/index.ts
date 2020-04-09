@@ -1,14 +1,11 @@
 import * as fs from 'fs';
 
-// only imports that start with 'com'
-import * as comment from './comment';
-import * as commit from './commit';
-import * as compose from './compose';
+import { handlePullRequest } from './pull-request';
+import { handleIssueComment } from './issue-comment';
 
 async function main() {
-  // TODO: move to a different module?
   const eventName = process.env.GITHUB_EVENT_NAME;
-  if (eventName !== 'pull_request') {
+  if (eventName !== 'pull_request' && eventName !== 'issue_comment') {
     process.exit(1);
   }
 
@@ -20,19 +17,16 @@ async function main() {
 
   const eventData = fs.readFileSync(eventPath, 'utf8');
   const eventObj = JSON.parse(eventData);
-  // console.log(eventObj);
 
-  const issueUrl = eventObj.pull_request.issue_url;
-  await comment.deleteExistingComments(issueUrl);
-
-  const commitsData = await commit.getCommits();
-  const message = compose.previewFromCommits(commitsData);
-  if (!message) {
-    console.log('no relevant changes detected, exiting gracefully');
-    process.exit(0);
+  if (eventName === 'pull_request') {
+    await handlePullRequest(eventObj);
+    return;
   }
 
-  comment.postComment(issueUrl, message);
+  if (eventName === 'issue_comment' && eventObj.action === 'edited') {
+    await handleIssueComment(eventObj);
+    return;
+  }
 }
 
 main();

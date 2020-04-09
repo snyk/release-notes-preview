@@ -6,6 +6,8 @@
 
 GitHub Action to provide preview of expected release notes based on [Semantic Release](https://github.com/semantic-release/semantic-release).
 The preview would be posted on every pull request opened against the desired branch(es).
+A _pending_ commit status titled `Release Notes Confirmation` would be created when initially posting the release notes.
+The commit status would change to _success_ once the checkbox at the bottom of the release notes preview is checked.
 
 ## Prerequisites ##
 
