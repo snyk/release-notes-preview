@@ -1,7 +1,7 @@
 const needle = require('needle');
 
 import * as config from './config';
-import { postCommitStatus } from './commit-status';
+import { commitStatusSuccess } from './commit-status';
 
 // TODO type
 export async function handleIssueComment(eventObj: any): Promise<void> {
@@ -25,5 +25,5 @@ export async function handleIssueComment(eventObj: any): Promise<void> {
 
   const pullRequest = await needle('get', eventObj.issue.pull_request.url, null, options);
   const statusesUrl = pullRequest.body.statuses_url;
-  await postCommitStatus(statusesUrl, 'success', 'release notes reviewed');
+  await commitStatusSuccess(statusesUrl);
 }

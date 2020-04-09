@@ -2,7 +2,7 @@ import * as comment from './comment';
 import * as commit from './commit';
 import * as compose from './compose';
 
-import { postCommitStatus } from './commit-status';
+import { commitStatusPending, commitStatusSuccess } from './commit-status';
 
 // TODO type
 export async function handlePullRequest(eventObj: any): Promise<void> {
@@ -13,9 +13,10 @@ export async function handlePullRequest(eventObj: any): Promise<void> {
   const message = compose.previewFromCommits(commitsData);
   if (!message) {
     console.log('no relevant changes detected, exiting gracefully');
+    await commitStatusSuccess(eventObj.pull_request.statuses_url);
     process.exit(0);
   }
 
   comment.postComment(issueUrl, message);
-  await postCommitStatus(eventObj.pull_request.statuses_url, 'pending', 'awaiting release notes review');
+  await commitStatusPending(eventObj.pull_request.statuses_url);
 }
