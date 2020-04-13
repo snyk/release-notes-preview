@@ -23,13 +23,15 @@ export async function deleteExistingComments(issueUrl: string): Promise<void> {
   const listCommentsUrl = `${issueUrl}/comments`;
   const payload = null;
 
-  const userId = await getPosterId();
   const commentsResponse = await needle('get', listCommentsUrl, payload, options);
   const comments = commentsResponse.body;
 
   const deleteRequests: any[] = [];
   for (const comment of comments) {
-    if (comment.user.id !== userId) {
+    // TODO: identify comments to delete better
+    // can also check comment.user: login, id, type
+    if ((comment.body.indexOf(config.ACKNOWLEDGEMENT.CHECKED) === -1) &&
+      (comment.body.indexOf(config.ACKNOWLEDGEMENT.UNCHECKED) === -1)) {
       continue;
     }
     const deleteUrl = comment.url;
@@ -41,10 +43,4 @@ export async function deleteExistingComments(issueUrl: string): Promise<void> {
   // TODO: throttle if needed
   // right now it is expected that no more than 1 request will be present
   await Promise.all(deleteRequests);
-}
-
-async function getPosterId(): Promise<number> {
-  const payload = null;
-  const response = await needle('get', 'https://api.github.com/user', payload, options);
-  return response.body.id;
 }

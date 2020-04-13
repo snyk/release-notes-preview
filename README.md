@@ -9,15 +9,9 @@ The preview would be posted on every pull request opened against the desired bra
 A _pending_ commit status titled `Release Notes Confirmation` would be created when initially posting the release notes.
 The commit status would change to _success_ once the checkbox at the bottom of the release notes preview is checked.
 
-## Prerequisites ##
-
-An authentication token for GitHub, used for posting the preview of the release notes.
-
 ## Setup ##
 
-1. Generate a GitHub token with sufficient write access to the repository. Privileges depend on whether the project is open sourced or not.
-2. Add the GitHub token as a secret to the repository, named `RELEASE_NOTES_GITHUB_TOKEN`.
-3. Create a file with the following content under `.github/workflows/release-notes.yaml`:
+Create a file with the following content under `.github/workflows/release-notes.yaml`:
 
 ```
 name: Release-Notes-Preview
@@ -40,5 +34,5 @@ jobs:
         releaseBranch: master
       env:
         GITHUB_PR_USERNAME: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES_GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
