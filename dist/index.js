@@ -9348,12 +9348,14 @@ exports.postComment = postComment;
 async function deleteExistingComments(issueUrl) {
     const listCommentsUrl = `${issueUrl}/comments`;
     const payload = null;
-    const userId = await getPosterId();
     const commentsResponse = await needle('get', listCommentsUrl, payload, options);
     const comments = commentsResponse.body;
     const deleteRequests = [];
     for (const comment of comments) {
-        if (comment.user.id !== userId) {
+        // TODO: identify comments to delete better
+        // can also check comment.user: login, id, type
+        if ((comment.body.indexOf(config.ACKNOWLEDGEMENT.CHECKED) === -1) &&
+            (comment.body.indexOf(config.ACKNOWLEDGEMENT.UNCHECKED) === -1)) {
             continue;
         }
         const deleteUrl = comment.url;
@@ -9366,11 +9368,6 @@ async function deleteExistingComments(issueUrl) {
     await Promise.all(deleteRequests);
 }
 exports.deleteExistingComments = deleteExistingComments;
-async function getPosterId() {
-    const payload = null;
-    const response = await needle('get', 'https://api.github.com/user', payload, options);
-    return response.body.id;
-}
 //# sourceMappingURL=comment.js.map
 
 /***/ }),
