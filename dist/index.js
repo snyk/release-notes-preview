@@ -9369,6 +9369,8 @@ exports.deleteExistingComments = deleteExistingComments;
 async function getPosterId() {
     const payload = null;
     const response = await needle('get', 'https://api.github.com/user', payload, options);
+    console.log('*********');
+    console.log(response.body);
     return response.body.id;
 }
 //# sourceMappingURL=comment.js.map

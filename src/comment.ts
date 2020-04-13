@@ -46,5 +46,7 @@ export async function deleteExistingComments(issueUrl: string): Promise<void> {
 async function getPosterId(): Promise<number> {
   const payload = null;
   const response = await needle('get', 'https://api.github.com/user', payload, options);
+  console.log('*********');
+  console.log(response.body);
   return response.body.id;
 }

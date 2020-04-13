@@ -318,7 +318,7 @@
         "signature": "2cd4d7946ffdc2d4a4abddfc4392c1a2b001ad203edccc482fe463906251ca88"
       },
       "../src/comment.ts": {
-        "version": "f32b1715c3247fbedf37cdb591f2edca3bab5f1ba97bd1a3e0e572195e06e7a3",
+        "version": "910a5b04945772c55ad410bb7cc19a531dca633dad9d9049af8fc17adc0ceedb",
         "signature": "0cb8d03e55c9dea9f3bc8589000f32a46bd418148f02d0b4d7b4084f0f7c00aa"
       },
       "../src/commit-status.ts": {
