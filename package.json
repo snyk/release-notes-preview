@@ -18,7 +18,7 @@
   "homepage": "https://github.com/snyk/release-notes-preview#readme",
   "dependencies": {
     "child-process-promise": "^2.2.1",
-    "needle": "^2.4.0"
+    "needle": "^2.4.1"
   },
   "devDependencies": {
     "@zeit/ncc": "^0.20.5",
