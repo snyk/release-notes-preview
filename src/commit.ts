@@ -39,20 +39,20 @@ function processCommits(commitHeaders: string[]): ICommitData {
     const line = commitHeader.trim();
     console.log('processing line:', line);
     const words = line.split(' ');
-
+  
     if (words[1] === 'Merge') { // hack
       console.log('treating line as a merge commit, not processing it');
       continue;
     }
 
-    if (!words[1].endsWith(':')) {
+    if (!words[1]?.endsWith(':')) {
       console.log('unknown prefix', words[1], 'treating it as misc');
       processedCommits['others'].push(line);
       continue;
     }
 
     const hash = words[0];
-    const prefix = words[1].split(':')[0];
+    const prefix = words[1]?.split(':')[0];
     const rest = words.slice(2).join(' ');
 
     const lineDescription = `${rest} (${hash})`;
