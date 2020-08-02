@@ -69,5 +69,6 @@ function processCommits(commitHeaders: string[]): ICommitData {
       processedCommits['others'].push(lineDescription);
     }
   }
+
   return processedCommits;
 }
