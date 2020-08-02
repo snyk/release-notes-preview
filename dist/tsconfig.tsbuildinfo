@@ -334,7 +334,7 @@
         "signature": "2d70434304a480b8f4936755cf835ac95e4230d0db854d5bc3d7c543eabfdaa4"
       },
       "../src/commit.ts": {
-        "version": "5b0b7e4279d992de1cbac8850cb63a15400e719103fb0aaece30ae7c041e18ab",
+        "version": "2077c5eb145eca91ea0b5c1829022aa8527370c1159047aa36a376dfcea91766",
         "signature": "dfa1b07ec47e1bbdb8b80f4eac4320a04330d2cce41cc13c028c87cbe6ab8a3d"
       },
       "../src/compose.ts": {
