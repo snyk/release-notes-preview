@@ -40,6 +40,11 @@ function processCommits(commitHeaders: string[]): ICommitData {
     console.log('processing line:', line);
     const words = line.split(' ');
 
+    if (words.length <= 1) {
+      console.log('missing commit message, not processing it');
+      continue;
+    }
+
     if (words[1] === 'Merge') { // hack
       console.log('treating line as a merge commit, not processing it');
       continue;
