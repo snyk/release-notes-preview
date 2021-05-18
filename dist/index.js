@@ -1299,6 +1299,7 @@ module.exports = {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.previewFromCommits = void 0;
 const config = __webpack_require__(145);
 function previewFromCommits(commitsData) {
     if (commitsData.feat.length === 0 && commitsData.fix.length === 0) {
@@ -1737,6 +1738,7 @@ module.exports = config;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.commitStatusSuccess = exports.commitStatusPending = void 0;
 const config = __webpack_require__(145);
 async function commitStatusPending(url) {
     await postCommitStatus(url, 'pending', 'awaiting release notes review');
@@ -5560,6 +5562,7 @@ module.exports = require("path");
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handlePullRequest = void 0;
 const comment = __webpack_require__(965);
 const commit = __webpack_require__(991);
 const compose = __webpack_require__(42);
@@ -5589,6 +5592,7 @@ exports.handlePullRequest = handlePullRequest;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handleIssueComment = void 0;
 const needle = __webpack_require__(219);
 const config = __webpack_require__(145);
 const commit_status_1 = __webpack_require__(148);
@@ -9328,6 +9332,7 @@ module.exports = [["8740","䏰䰲䘃䖦䕸𧉧䵷䖳𧲱䳢𧳅㮕䜶䝄䱇䱀�
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteExistingComments = exports.postComment = void 0;
 const needle = __webpack_require__(219);
 const config = __webpack_require__(145);
 const options = {
@@ -9551,6 +9556,7 @@ exports.fork = fork;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getCommits = void 0;
 const child_process_promise_1 = __webpack_require__(330);
 const config = __webpack_require__(145);
 async function getCommits() {
