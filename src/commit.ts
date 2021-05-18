@@ -27,6 +27,20 @@ async function commitHeadersSinceVersion(version: string): Promise<string[]> {
   return commitsSinceLastVersionOutput.stdout.trim().split('\n');
 }
 
+function getTypeAndScope(prefix: string): { type: string, scope?: string } {
+  const matches = /^([^(]*)(?:\(([^)]+)\))?:/.exec(prefix);
+  if (!matches) {
+    // Malformed commit prefix. Try our best.
+    return { 
+      type: prefix.split(':')[0] || ''
+    };
+  }
+  return {
+    type: matches[0],
+    scope: matches[1]
+  };
+}
+
 // TODO: handle merges and reverts
 function processCommits(commitHeaders: string[]): ICommitData {
   const processedCommits: ICommitData = {
@@ -58,13 +72,18 @@ function processCommits(commitHeaders: string[]): ICommitData {
       }
   
       const hash = words[0];
-      const prefix = words[1].split(':')[0];
+      const { type, scope } = getTypeAndScope(words[1]);
       const rest = words.slice(2).join(' ');
   
-      const lineDescription = `${rest} (${hash})`;
-      if (prefix in processedCommits) {
-        console.log(`adding "${lineDescription}" to ${prefix}`);
-        processedCommits[prefix].push(lineDescription);
+      const lineDescription = [
+        scope ? `${scope}:` : undefined,
+        rest,
+        `(${hash})`
+      ].filter(part => !!part).join(' ');
+      
+      if (type in processedCommits) {
+        console.log(`adding "${lineDescription}" to ${type}`);
+        processedCommits[type].push(lineDescription);
       } else {
         console.log(`adding "${lineDescription}" to others`);
         processedCommits['others'].push(lineDescription);

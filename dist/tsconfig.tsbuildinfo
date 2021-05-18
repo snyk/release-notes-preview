@@ -129,6 +129,10 @@
         "version": "5c771dbfab3a478efd78f456aa5fb48b90d562f5a7fca1501565b19a4c41b122",
         "signature": "5c771dbfab3a478efd78f456aa5fb48b90d562f5a7fca1501565b19a4c41b122"
       },
+      "../node_modules/tslib/tslib.d.ts": {
+        "version": "4576b4e61049f5ffd7c9e935cf88832e089265bdb15ffc35077310042cbbbeea",
+        "signature": "4576b4e61049f5ffd7c9e935cf88832e089265bdb15ffc35077310042cbbbeea"
+      },
       "../node_modules/@types/node/globals.d.ts": {
         "version": "facd846e52d080629af96d24241b95fdf1472bf77a9f5c447f6b7f7214142d5e",
         "signature": "facd846e52d080629af96d24241b95fdf1472bf77a9f5c447f6b7f7214142d5e"
@@ -334,7 +338,7 @@
         "signature": "2d70434304a480b8f4936755cf835ac95e4230d0db854d5bc3d7c543eabfdaa4"
       },
       "../src/commit.ts": {
-        "version": "228daee483f6216b64f467db3296cfe1cb03a34732309d6b2e676efc09fecace",
+        "version": "a0284f7eeb13fd9105a2d99f7288fce011594659821b5fcf0258a23f7551dacd",
         "signature": "dfa1b07ec47e1bbdb8b80f4eac4320a04330d2cce41cc13c028c87cbe6ab8a3d"
       },
       "../src/compose.ts": {
@@ -557,6 +561,12 @@
         "../node_modules/@types/node/ts3.2/util.d.ts"
       ],
       "../node_modules/typescript/lib/lib.es2018.full.d.ts": [
+        "../node_modules/@types/node/fs.d.ts",
+        "../node_modules/@types/node/ts3.2/fs.d.ts",
+        "../node_modules/@types/node/util.d.ts",
+        "../node_modules/@types/node/ts3.2/util.d.ts"
+      ],
+      "../node_modules/tslib/tslib.d.ts": [
         "../node_modules/@types/node/fs.d.ts",
         "../node_modules/@types/node/ts3.2/fs.d.ts",
         "../node_modules/@types/node/util.d.ts",
@@ -1204,6 +1214,12 @@
         "../node_modules/@types/node/util.d.ts",
         "../node_modules/@types/node/ts3.2/util.d.ts"
       ],
+      "../node_modules/tslib/tslib.d.ts": [
+        "../node_modules/@types/node/fs.d.ts",
+        "../node_modules/@types/node/ts3.2/fs.d.ts",
+        "../node_modules/@types/node/util.d.ts",
+        "../node_modules/@types/node/ts3.2/util.d.ts"
+      ],
       "../node_modules/@types/node/globals.d.ts": [
         "../node_modules/@types/node/fs.d.ts",
         "../node_modules/@types/node/ts3.2/fs.d.ts",
@@ -1590,6 +1606,7 @@
       ]
     },
     "semanticDiagnosticsPerFile": [
+      "../node_modules/tslib/tslib.d.ts",
       "../node_modules/@types/node/globals.d.ts",
       "../node_modules/@types/node/assert.d.ts",
       "../node_modules/@types/node/async_hooks.d.ts",

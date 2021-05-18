@@ -4201,7 +4201,7 @@ exports.write = writeCookieString;
 /***/ 360:
 /***/ (function(module) {
 
-module.exports = {"_args":[["needle@2.4.0","/Users/amir/projects/release-notes-preview"]],"_from":"needle@2.4.0","_id":"needle@2.4.0","_inBundle":false,"_integrity":"sha512-4Hnwzr3mi5L97hMYeNl8wRW/Onhy4nUKR/lVemJ8gJedxxUyBLm9kkrDColJvoSfwi0jCNhD+xCdOtiGDQiRZg==","_location":"/needle","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"needle@2.4.0","name":"needle","escapedName":"needle","rawSpec":"2.4.0","saveSpec":null,"fetchSpec":"2.4.0"},"_requiredBy":["/"],"_resolved":"https://registry.npmjs.org/needle/-/needle-2.4.0.tgz","_spec":"2.4.0","_where":"/Users/amir/projects/release-notes-preview","author":{"name":"Tomás Pollak","email":"tomas@forkhq.com"},"bin":{"needle":"bin/needle"},"bugs":{"url":"https://github.com/tomas/needle/issues"},"dependencies":{"debug":"^3.2.6","iconv-lite":"^0.4.4","sax":"^1.2.4"},"description":"The leanest and most handsome HTTP client in the Nodelands.","devDependencies":{"JSONStream":"^1.3.5","jschardet":"^1.6.0","mocha":"^5.2.0","q":"^1.5.1","should":"^13.2.3","sinon":"^2.3.0","xml2js":"^0.4.19"},"directories":{"lib":"./lib"},"engines":{"node":">= 4.4.x"},"homepage":"https://github.com/tomas/needle#readme","keywords":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"license":"MIT","main":"./lib/needle","name":"needle","repository":{"type":"git","url":"git+https://github.com/tomas/needle.git"},"scripts":{"test":"mocha test"},"tags":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"version":"2.4.0"};
+module.exports = {"_args":[["needle@2.4.0","/workspaces/release-notes-preview"]],"_from":"needle@2.4.0","_id":"needle@2.4.0","_inBundle":false,"_integrity":"sha512-4Hnwzr3mi5L97hMYeNl8wRW/Onhy4nUKR/lVemJ8gJedxxUyBLm9kkrDColJvoSfwi0jCNhD+xCdOtiGDQiRZg==","_location":"/needle","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"needle@2.4.0","name":"needle","escapedName":"needle","rawSpec":"2.4.0","saveSpec":null,"fetchSpec":"2.4.0"},"_requiredBy":["/"],"_resolved":"https://registry.npmjs.org/needle/-/needle-2.4.0.tgz","_spec":"2.4.0","_where":"/workspaces/release-notes-preview","author":{"name":"Tomás Pollak","email":"tomas@forkhq.com"},"bin":{"needle":"bin/needle"},"bugs":{"url":"https://github.com/tomas/needle/issues"},"dependencies":{"debug":"^3.2.6","iconv-lite":"^0.4.4","sax":"^1.2.4"},"description":"The leanest and most handsome HTTP client in the Nodelands.","devDependencies":{"JSONStream":"^1.3.5","jschardet":"^1.6.0","mocha":"^5.2.0","q":"^1.5.1","should":"^13.2.3","sinon":"^2.3.0","xml2js":"^0.4.19"},"directories":{"lib":"./lib"},"engines":{"node":">= 4.4.x"},"homepage":"https://github.com/tomas/needle#readme","keywords":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"license":"MIT","main":"./lib/needle","name":"needle","repository":{"type":"git","url":"git+https://github.com/tomas/needle.git"},"scripts":{"test":"mocha test"},"tags":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"version":"2.4.0"};
 
 /***/ }),
 
@@ -9568,6 +9568,19 @@ async function commitHeadersSinceVersion(version) {
     const commitsSinceLastVersionOutput = await child_process_promise_1.spawn('git', ['log', '--no-decorate', `${version}..HEAD`, '--oneline'], { capture: ['stdout', 'stderr'] });
     return commitsSinceLastVersionOutput.stdout.trim().split('\n');
 }
+function getTypeAndScope(prefix) {
+    const matches = /^([^(]*)(?:\(([^)]+)\))?:/.exec(prefix);
+    if (!matches) {
+        // Malformed commit prefix. Try our best.
+        return {
+            type: prefix.split(':')[0] || ''
+        };
+    }
+    return {
+        type: matches[0],
+        scope: matches[1]
+    };
+}
 // TODO: handle merges and reverts
 function processCommits(commitHeaders) {
     const processedCommits = {
@@ -9594,12 +9607,16 @@ function processCommits(commitHeaders) {
                 continue;
             }
             const hash = words[0];
-            const prefix = words[1].split(':')[0];
+            const { type, scope } = getTypeAndScope(words[1]);
             const rest = words.slice(2).join(' ');
-            const lineDescription = `${rest} (${hash})`;
-            if (prefix in processedCommits) {
-                console.log(`adding "${lineDescription}" to ${prefix}`);
-                processedCommits[prefix].push(lineDescription);
+            const lineDescription = [
+                scope ? `${scope}:` : undefined,
+                rest,
+                `(${hash})`
+            ].filter(part => !!part).join(' ');
+            if (type in processedCommits) {
+                console.log(`adding "${lineDescription}" to ${type}`);
+                processedCommits[type].push(lineDescription);
             }
             else {
                 console.log(`adding "${lineDescription}" to others`);
