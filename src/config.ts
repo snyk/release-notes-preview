@@ -17,6 +17,7 @@ const config = {
   RELEASE_BRANCH: process.env.INPUT_RELEASEBRANCH!,
   GITHUB_PR_USERNAME: process.env.GITHUB_PR_USERNAME,
   ACKNOWLEDGEMENT: {
+    ENABLED: false,
     CHECKED: '- [x] I hereby acknowledge these release notes are 🥙 AWESOME 🥙',
     UNCHECKED: '- [ ] I hereby acknowledge these release notes are 🥙 AWESOME 🥙',
   }

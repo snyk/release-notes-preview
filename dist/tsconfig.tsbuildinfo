@@ -314,8 +314,8 @@
         "signature": "3b7ee66f0fc447e9c6db2b8824a6cf9d90fe98d2623eee33e30c14f3e22ceda5"
       },
       "../src/config.ts": {
-        "version": "8af468db46b0311b4a4174583c5deaaa6a073d2d737327e120585b2deb5e1964",
-        "signature": "2cd4d7946ffdc2d4a4abddfc4392c1a2b001ad203edccc482fe463906251ca88"
+        "version": "9ef0b3754dc869238b7bb0fc2070565f0ff3fba2ae141b3d9aea8add0ba5c3a0",
+        "signature": "2e4d1bb62e4a7d678868c071893f4ab81b5f50d13d9639c70c06f5be34a0d287"
       },
       "../src/comment.ts": {
         "version": "041f37ebd2e12410332f6fb7b28503f747a5a70551e6c7dfb99e72a9f452dabe",
@@ -350,7 +350,7 @@
         "signature": "3d38e46868145e055670bb1f44e2a0db091a6e630e5cc61f40bf767391bed1ee"
       },
       "../src/index.ts": {
-        "version": "f067ad674a055b9b7963d7672d30056dd2a8b65ea20914cc1ff3010ec86fc3d5",
+        "version": "18195b61ed2b760e5ba28dcb147d2c9d59a15b073c968aa53e67bbef62b764c7",
         "signature": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
       }
     },
@@ -1004,6 +1004,7 @@
       ],
       "../src/index.ts": [
         "../node_modules/@types/node/fs.d.ts",
+        "../src/config.ts",
         "../src/pull-request.ts",
         "../src/issue-comment.ts",
         "../node_modules/@types/node/ts3.2/fs.d.ts",

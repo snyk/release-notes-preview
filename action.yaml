@@ -6,7 +6,7 @@ inputs:
   releaseBranch:
     description: 'Branch where the Semantic Release will occur.'
     required: false
-    default: 'master'
+    default: 'main'
 
 runs:
   using: node12

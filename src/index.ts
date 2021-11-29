@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as config from './config';
 
 import { handlePullRequest } from './pull-request';
 import { handleIssueComment } from './issue-comment';
@@ -23,7 +24,7 @@ async function main() {
     return;
   }
 
-  if (eventName === 'issue_comment' && eventObj.action === 'edited') {
+  if (eventName === 'issue_comment' && eventObj.action === 'edited' && config.ACKNOWLEDGEMENT.ENABLED) {
     await handleIssueComment(eventObj);
     return;
   }
