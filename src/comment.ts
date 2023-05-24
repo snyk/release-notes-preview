@@ -9,7 +9,7 @@ const options = {
     Authorization: 'token ' + config.GITHUB_TOKEN,
   },
 };
-
+ 
 export async function postComment(issueUrl: string, commentText: string): Promise<void> {
   const url = `${issueUrl}/comments`;
   const payload = {
