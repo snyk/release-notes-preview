@@ -98,6 +98,48 @@ function DBCSCodec(codecOptions, iconv) {
     for (var i = 0; i < mappingTable.length; i++)
         this._addDecodeChunk(mappingTable[i]);
 
+    // Load & create GB18030 tables when needed.
+    if (typeof codecOptions.gb18030 === 'function') {
+        this.gb18030 = codecOptions.gb18030(); // Load GB18030 ranges.
+
+        // Add GB18030 common decode nodes.
+        var commonThirdByteNodeIdx = this.decodeTables.length;
+        this.decodeTables.push(UNASSIGNED_NODE.slice(0));
+
+        var commonFourthByteNodeIdx = this.decodeTables.length;
+        this.decodeTables.push(UNASSIGNED_NODE.slice(0));
+
+        // Fill out the tree
+        var firstByteNode = this.decodeTables[0];
+        for (var i = 0x81; i <= 0xFE; i++) {
+            var secondByteNode = this.decodeTables[NODE_START - firstByteNode[i]];
+            for (var j = 0x30; j <= 0x39; j++) {
+                if (secondByteNode[j] === UNASSIGNED) {
+                    secondByteNode[j] = NODE_START - commonThirdByteNodeIdx;
+                } else if (secondByteNode[j] > NODE_START) {
+                    throw new Error("gb18030 decode tables conflict at byte 2");
+                }
+
+                var thirdByteNode = this.decodeTables[NODE_START - secondByteNode[j]];
+                for (var k = 0x81; k <= 0xFE; k++) {
+                    if (thirdByteNode[k] === UNASSIGNED) {
+                        thirdByteNode[k] = NODE_START - commonFourthByteNodeIdx;
+                    } else if (thirdByteNode[k] === NODE_START - commonFourthByteNodeIdx) {
+                        continue;
+                    } else if (thirdByteNode[k] > NODE_START) {
+                        throw new Error("gb18030 decode tables conflict at byte 3");
+                    }
+
+                    var fourthByteNode = this.decodeTables[NODE_START - thirdByteNode[k]];
+                    for (var l = 0x30; l <= 0x39; l++) {
+                        if (fourthByteNode[l] === UNASSIGNED)
+                            fourthByteNode[l] = GB18030_CODE;
+                    }
+                }
+            }
+        }
+    }
+
     this.defaultCharUnicode = iconv.defaultCharUnicode;
 
     
@@ -141,30 +183,6 @@ function DBCSCodec(codecOptions, iconv) {
     this.defCharSB  = this.encodeTable[0][iconv.defaultCharSingleByte.charCodeAt(0)];
     if (this.defCharSB === UNASSIGNED) this.defCharSB = this.encodeTable[0]['?'];
     if (this.defCharSB === UNASSIGNED) this.defCharSB = "?".charCodeAt(0);
-
-
-    // Load & create GB18030 tables when needed.
-    if (typeof codecOptions.gb18030 === 'function') {
-        this.gb18030 = codecOptions.gb18030(); // Load GB18030 ranges.
-
-        // Add GB18030 decode tables.
-        var thirdByteNodeIdx = this.decodeTables.length;
-        var thirdByteNode = this.decodeTables[thirdByteNodeIdx] = UNASSIGNED_NODE.slice(0);
-
-        var fourthByteNodeIdx = this.decodeTables.length;
-        var fourthByteNode = this.decodeTables[fourthByteNodeIdx] = UNASSIGNED_NODE.slice(0);
-
-        for (var i = 0x81; i <= 0xFE; i++) {
-            var secondByteNodeIdx = NODE_START - this.decodeTables[0][i];
-            var secondByteNode = this.decodeTables[secondByteNodeIdx];
-            for (var j = 0x30; j <= 0x39; j++)
-                secondByteNode[j] = NODE_START - thirdByteNodeIdx;
-        }
-        for (var i = 0x81; i <= 0xFE; i++)
-            thirdByteNode[i] = NODE_START - fourthByteNodeIdx;
-        for (var i = 0x30; i <= 0x39; i++)
-            fourthByteNode[i] = GB18030_CODE
-    }        
 }
 
 DBCSCodec.prototype.encoder = DBCSEncoder;
@@ -173,7 +191,7 @@ DBCSCodec.prototype.decoder = DBCSDecoder;
 // Decoder helpers
 DBCSCodec.prototype._getDecodeTrieNode = function(addr) {
     var bytes = [];
-    for (; addr > 0; addr >>= 8)
+    for (; addr > 0; addr >>>= 8)
         bytes.push(addr & 0xFF);
     if (bytes.length == 0)
         bytes.push(0);
@@ -298,19 +316,32 @@ DBCSCodec.prototype._setEncodeSequence = function(seq, dbcsCode) {
 
 DBCSCodec.prototype._fillEncodeTable = function(nodeIdx, prefix, skipEncodeChars) {
     var node = this.decodeTables[nodeIdx];
+    var hasValues = false;
+    var subNodeEmpty = {};
     for (var i = 0; i < 0x100; i++) {
         var uCode = node[i];
         var mbCode = prefix + i;
         if (skipEncodeChars[mbCode])
             continue;
 
-        if (uCode >= 0)
+        if (uCode >= 0) {
             this._setEncodeChar(uCode, mbCode);
-        else if (uCode <= NODE_START)
-            this._fillEncodeTable(NODE_START - uCode, mbCode << 8, skipEncodeChars);
-        else if (uCode <= SEQ_START)
+            hasValues = true;
+        } else if (uCode <= NODE_START) {
+            var subNodeIdx = NODE_START - uCode;
+            if (!subNodeEmpty[subNodeIdx]) {  // Skip empty subtrees (they are too large in gb18030).
+                var newPrefix = (mbCode << 8) >>> 0;  // NOTE: '>>> 0' keeps 32-bit num positive.
+                if (this._fillEncodeTable(subNodeIdx, newPrefix, skipEncodeChars))
+                    hasValues = true;
+                else
+                    subNodeEmpty[subNodeIdx] = true;
+            }
+        } else if (uCode <= SEQ_START) {
             this._setEncodeSequence(this.decodeTableSeq[SEQ_START - uCode], mbCode);
+            hasValues = true;
+        }
     }
+    return hasValues;
 }
 
 
@@ -437,9 +468,14 @@ DBCSEncoder.prototype.write = function(str) {
             newBuf[j++] = dbcsCode >> 8;   // high byte
             newBuf[j++] = dbcsCode & 0xFF; // low byte
         }
-        else {
+        else if (dbcsCode < 0x1000000) {
             newBuf[j++] = dbcsCode >> 16;
             newBuf[j++] = (dbcsCode >> 8) & 0xFF;
+            newBuf[j++] = dbcsCode & 0xFF;
+        } else {
+            newBuf[j++] = dbcsCode >>> 24;
+            newBuf[j++] = (dbcsCode >>> 16) & 0xFF;
+            newBuf[j++] = (dbcsCode >>> 8) & 0xFF;
             newBuf[j++] = dbcsCode & 0xFF;
         }
     }
@@ -489,7 +525,7 @@ DBCSEncoder.prototype.findIdx = findIdx;
 function DBCSDecoder(options, codec) {
     // Decoder state
     this.nodeIdx = 0;
-    this.prevBuf = Buffer.alloc(0);
+    this.prevBytes = [];
 
     // Static data
     this.decodeTables = codec.decodeTables;
@@ -501,15 +537,12 @@ function DBCSDecoder(options, codec) {
 DBCSDecoder.prototype.write = function(buf) {
     var newBuf = Buffer.alloc(buf.length*2),
         nodeIdx = this.nodeIdx, 
-        prevBuf = this.prevBuf, prevBufOffset = this.prevBuf.length,
-        seqStart = -this.prevBuf.length, // idx of the start of current parsed sequence.
+        prevBytes = this.prevBytes, prevOffset = this.prevBytes.length,
+        seqStart = -this.prevBytes.length, // idx of the start of current parsed sequence.
         uCode;
 
-    if (prevBufOffset > 0) // Make prev buf overlap a little to make it easier to slice later.
-        prevBuf = Buffer.concat([prevBuf, buf.slice(0, 10)]);
-    
     for (var i = 0, j = 0; i < buf.length; i++) {
-        var curByte = (i >= 0) ? buf[i] : prevBuf[i + prevBufOffset];
+        var curByte = (i >= 0) ? buf[i] : prevBytes[i + prevOffset];
 
         // Lookup in current trie node.
         var uCode = this.decodeTables[nodeIdx][curByte];
@@ -519,13 +552,18 @@ DBCSDecoder.prototype.write = function(buf) {
         }
         else if (uCode === UNASSIGNED) { // Unknown char.
             // TODO: Callback with seq.
-            //var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
-            i = seqStart; // Try to parse again, after skipping first byte of the sequence ('i' will be incremented by 'for' cycle).
             uCode = this.defaultCharUnicode.charCodeAt(0);
+            i = seqStart; // Skip one byte ('i' will be incremented by the for loop) and try to parse again.
         }
         else if (uCode === GB18030_CODE) {
-            var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
-            var ptr = (curSeq[0]-0x81)*12600 + (curSeq[1]-0x30)*1260 + (curSeq[2]-0x81)*10 + (curSeq[3]-0x30);
+            if (i >= 3) {
+                var ptr = (buf[i-3]-0x81)*12600 + (buf[i-2]-0x30)*1260 + (buf[i-1]-0x81)*10 + (curByte-0x30);
+            } else {
+                var ptr = (prevBytes[i-3+prevOffset]-0x81)*12600 + 
+                          (((i-2 >= 0) ? buf[i-2] : prevBytes[i-2+prevOffset])-0x30)*1260 + 
+                          (((i-1 >= 0) ? buf[i-1] : prevBytes[i-1+prevOffset])-0x81)*10 + 
+                          (curByte-0x30);
+            }
             var idx = findIdx(this.gb18030.gbChars, ptr);
             uCode = this.gb18030.uChars[idx] + ptr - this.gb18030.gbChars[idx];
         }
@@ -546,13 +584,13 @@ DBCSDecoder.prototype.write = function(buf) {
             throw new Error("iconv-lite internal error: invalid decoding table value " + uCode + " at " + nodeIdx + "/" + curByte);
 
         // Write the character to buffer, handling higher planes using surrogate pair.
-        if (uCode > 0xFFFF) { 
+        if (uCode >= 0x10000) { 
             uCode -= 0x10000;
-            var uCodeLead = 0xD800 + Math.floor(uCode / 0x400);
+            var uCodeLead = 0xD800 | (uCode >> 10);
             newBuf[j++] = uCodeLead & 0xFF;
             newBuf[j++] = uCodeLead >> 8;
 
-            uCode = 0xDC00 + uCode % 0x400;
+            uCode = 0xDC00 | (uCode & 0x3FF);
         }
         newBuf[j++] = uCode & 0xFF;
         newBuf[j++] = uCode >> 8;
@@ -562,7 +600,10 @@ DBCSDecoder.prototype.write = function(buf) {
     }
 
     this.nodeIdx = nodeIdx;
-    this.prevBuf = (seqStart >= 0) ? buf.slice(seqStart) : prevBuf.slice(seqStart + prevBufOffset);
+    this.prevBytes = (seqStart >= 0)
+        ? Array.prototype.slice.call(buf, seqStart)
+        : prevBytes.slice(seqStart + prevOffset).concat(Array.prototype.slice.call(buf));
+
     return newBuf.slice(0, j).toString('ucs2');
 }
 
@@ -570,18 +611,19 @@ DBCSDecoder.prototype.end = function() {
     var ret = '';
 
     // Try to parse all remaining chars.
-    while (this.prevBuf.length > 0) {
+    while (this.prevBytes.length > 0) {
         // Skip 1 character in the buffer.
         ret += this.defaultCharUnicode;
-        var buf = this.prevBuf.slice(1);
+        var bytesArr = this.prevBytes.slice(1);
 
         // Parse remaining as usual.
-        this.prevBuf = Buffer.alloc(0);
+        this.prevBytes = [];
         this.nodeIdx = 0;
-        if (buf.length > 0)
-            ret += this.write(buf);
+        if (bytesArr.length > 0)
+            ret += this.write(bytesArr);
     }
 
+    this.prevBytes = [];
     this.nodeIdx = 0;
     return ret;
 }
@@ -593,7 +635,7 @@ function findIdx(table, val) {
 
     var l = 0, r = table.length;
     while (l < r-1) { // always table[l] <= val < table[r]
-        var mid = l + Math.floor((r-l+1)/2);
+        var mid = l + ((r-l+1) >> 1);
         if (table[mid] <= val)
             l = mid;
         else
@@ -635,7 +677,7 @@ function parseXML(str, cb) {
     }
   }
 
-  parser.ontext = function(t) {
+  parser.oncdata = parser.ontext = function(t) {
     if (current) current.value += t
   }
 
@@ -708,7 +750,8 @@ function buildParser(name, types, fn) {
 
 buildParser('json', [
   'application/json',
-  'text/javascript'
+  'text/javascript',
+  'application/vnd.api+json'
 ], function(buffer, cb) {
   var err, data;
   try { data = JSON.parse(buffer); } catch (e) { err = e; }
@@ -729,6 +772,7 @@ buildParser('xml', [
 
 module.exports = parsers;
 module.exports.use = buildParser;
+
 
 /***/ }),
 
@@ -1299,6 +1343,7 @@ module.exports = {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.previewFromCommits = void 0;
 const config = __webpack_require__(145);
 function previewFromCommits(commitsData) {
     if (commitsData.feat.length === 0 && commitsData.fix.length === 0) {
@@ -1494,7 +1539,10 @@ var formatters = module.exports.formatters;
 
 formatters.o = function (v) {
   this.inspectOpts.colors = this.useColors;
-  return util.inspect(v, this.inspectOpts).replace(/\s*\n\s*/g, ' ');
+  return util.inspect(v, this.inspectOpts)
+    .split('\n')
+    .map(function (str) { return str.trim(); })
+    .join(' ');
 };
 /**
  * Map %O to `util.inspect()`, allowing multiple lines if needed.
@@ -1683,7 +1731,19 @@ module.exports = {
     'big5hkscs': {
         type: '_dbcs',
         table: function() { return __webpack_require__(393).concat(__webpack_require__(958)) },
-        encodeSkipVals: [0xa2cc],
+        encodeSkipVals: [
+            // Although Encoding Standard says we should avoid encoding to HKSCS area (See Step 1 of
+            // https://encoding.spec.whatwg.org/#index-big5-pointer), we still do it to increase compatibility with ICU.
+            // But if a single unicode point can be encoded both as HKSCS and regular Big5, we prefer the latter.
+            0x8e69, 0x8e6f, 0x8e7e, 0x8eab, 0x8eb4, 0x8ecd, 0x8ed0, 0x8f57, 0x8f69, 0x8f6e, 0x8fcb, 0x8ffe,
+            0x906d, 0x907a, 0x90c4, 0x90dc, 0x90f1, 0x91bf, 0x92af, 0x92b0, 0x92b1, 0x92b2, 0x92d1, 0x9447, 0x94ca,
+            0x95d9, 0x96fc, 0x9975, 0x9b76, 0x9b78, 0x9b7b, 0x9bc6, 0x9bde, 0x9bec, 0x9bf6, 0x9c42, 0x9c53, 0x9c62,
+            0x9c68, 0x9c6b, 0x9c77, 0x9cbc, 0x9cbd, 0x9cd0, 0x9d57, 0x9d5a, 0x9dc4, 0x9def, 0x9dfb, 0x9ea9, 0x9eef,
+            0x9efd, 0x9f60, 0x9fcb, 0xa077, 0xa0dc, 0xa0df, 0x8fcc, 0x92c8, 0x9644, 0x96ed,
+
+            // Step 2 of https://encoding.spec.whatwg.org/#index-big5-pointer: Use last pointer for U+2550, U+255E, U+2561, U+256A, U+5341, or U+5345
+            0xa2a4, 0xa2a5, 0xa2a7, 0xa2a6, 0xa2cc, 0xa2ce,
+        ],
     },
 
     'cnbig5': 'big5hkscs',
@@ -1737,6 +1797,7 @@ module.exports = config;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.commitStatusSuccess = exports.commitStatusPending = void 0;
 const config = __webpack_require__(145);
 async function commitStatusPending(url) {
     await postCommitStatus(url, 'pending', 'awaiting release notes review');
@@ -1827,10 +1888,20 @@ if (!StringDecoder.prototype.end) // Node v0.8 doesn't have this method.
 
 
 function InternalDecoder(options, codec) {
-    StringDecoder.call(this, codec.enc);
+    this.decoder = new StringDecoder(codec.enc);
 }
 
-InternalDecoder.prototype = StringDecoder.prototype;
+InternalDecoder.prototype.write = function(buf) {
+    if (!Buffer.isBuffer(buf)) {
+        buf = Buffer.from(buf);
+    }
+
+    return this.decoder.write(buf);
+}
+
+InternalDecoder.prototype.end = function() {
+    return this.decoder.end();
+}
 
 
 //------------------------------------------------------------------------------
@@ -2216,7 +2287,7 @@ Utf7Decoder.prototype.write = function(buf) {
                 if (i == lastI && buf[i] == minusChar) {// "+-" -> "+"
                     res += "+";
                 } else {
-                    var b64str = base64Accum + buf.slice(lastI, i).toString();
+                    var b64str = base64Accum + this.iconv.decode(buf.slice(lastI, i), "ascii");
                     res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
                 }
 
@@ -2233,7 +2304,7 @@ Utf7Decoder.prototype.write = function(buf) {
     if (!inBase64) {
         res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
     } else {
-        var b64str = base64Accum + buf.slice(lastI).toString();
+        var b64str = base64Accum + this.iconv.decode(buf.slice(lastI), "ascii");
 
         var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
         base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
@@ -2387,7 +2458,7 @@ Utf7IMAPDecoder.prototype.write = function(buf) {
                 if (i == lastI && buf[i] == minusChar) { // "&-" -> "&"
                     res += "&";
                 } else {
-                    var b64str = base64Accum + buf.slice(lastI, i).toString().replace(/,/g, '/');
+                    var b64str = base64Accum + this.iconv.decode(buf.slice(lastI, i), "ascii").replace(/,/g, '/');
                     res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
                 }
 
@@ -2404,7 +2475,7 @@ Utf7IMAPDecoder.prototype.write = function(buf) {
     if (!inBase64) {
         res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
     } else {
-        var b64str = base64Accum + buf.slice(lastI).toString().replace(/,/g, '/');
+        var b64str = base64Accum + this.iconv.decode(buf.slice(lastI), "ascii").replace(/,/g, '/');
 
         var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
         base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
@@ -2827,7 +2898,7 @@ module.exports = safer
 //////////////////////////////////////////
 // Needle -- HTTP Client for Node.js
 // Written by Tomás Pollak <tomas@forkhq.com>
-// (c) 2012-2017 - Fork Ltd.
+// (c) 2012-2020 - Fork Ltd.
 // MIT Licensed
 //////////////////////////////////////////
 
@@ -2842,7 +2913,8 @@ var fs          = __webpack_require__(747),
     auth        = __webpack_require__(458),
     cookies     = __webpack_require__(339),
     parsers     = __webpack_require__(13),
-    decoder     = __webpack_require__(825);
+    decoder     = __webpack_require__(825),
+    utils       = __webpack_require__(275);
 
 //////////////////////////////////////////
 // variabilia
@@ -2852,7 +2924,7 @@ var version     = __webpack_require__(360).version;
 var user_agent  = 'Needle/' + version;
 user_agent     += ' (Node.js ' + process.version + '; ' + process.platform + ' ' + process.arch + ')';
 
-var tls_options = 'agent pfx key passphrase cert ca ciphers rejectUnauthorized secureProtocol checkServerIdentity';
+var tls_options = 'pfx key passphrase cert ca ciphers rejectUnauthorized secureProtocol checkServerIdentity family';
 
 // older versions of node (< 0.11.4) prevent the runtime from exiting
 // because of connections in keep-alive state. so if this is the case
@@ -2863,25 +2935,38 @@ var close_by_default = !http.Agent || http.Agent.defaultMaxSockets != Infinity;
 var extend = Object.assign ? Object.assign : __webpack_require__(669)._extend;
 
 // these are the status codes that Needle interprets as redirects.
-var redirect_codes = [301, 302, 303, 307];
+var redirect_codes = [301, 302, 303, 307, 308];
 
 //////////////////////////////////////////
-// decompressors for gzip/deflate bodies
+// decompressors for gzip/deflate/br bodies
+
+function bind_opts(fn, options) {
+  return fn.bind(null, options);
+}
 
 var decompressors = {};
 
 try {
 
   var zlib = __webpack_require__(903);
-  decompressors['x-deflate'] = zlib.Inflate;
-  decompressors['deflate']   = zlib.Inflate;
-  decompressors['x-gzip']    = zlib.Gunzip;
-  decompressors['gzip']      = zlib.Gunzip;
 
   // Enable Z_SYNC_FLUSH to avoid Z_BUF_ERROR errors (Node PR #2595)
   var zlib_options = {
     flush: zlib.Z_SYNC_FLUSH,
     finishFlush: zlib.Z_SYNC_FLUSH
+  };
+
+  var br_options = {
+    flush: zlib.BROTLI_OPERATION_FLUSH,
+    finishFlush: zlib.BROTLI_OPERATION_FLUSH
+  };
+
+  decompressors['x-deflate'] = bind_opts(zlib.Inflate, zlib_options);
+  decompressors['deflate']   = bind_opts(zlib.Inflate, zlib_options);
+  decompressors['x-gzip']    = bind_opts(zlib.Gunzip, zlib_options);
+  decompressors['gzip']      = bind_opts(zlib.Gunzip, zlib_options);
+  if (typeof zlib.BrotliDecompress === 'function') {
+    decompressors['br']      = bind_opts(zlib.BrotliDecompress, br_options);
   }
 
 } catch(e) { /* zlib not available */ }
@@ -2896,7 +2981,9 @@ var defaults = {
   parse_response          : 'all', // same as true. valid options: 'json', 'xml' or false/null
   proxy                   : null,
 
-  // headers
+  // agent & headers
+  agent                   : null,
+  headers                 : {},
   accept                  : '*/*',
   user_agent              : user_agent,
 
@@ -2908,13 +2995,15 @@ var defaults = {
   stream_length           : -1,
 
   // booleans
+  compressed              : false,
   decode_response         : true,
   parse_cookies           : true,
   follow_set_cookies      : false,
   follow_set_referer      : false,
   follow_keep_method      : false,
   follow_if_same_host     : false,
-  follow_if_same_protocol : false
+  follow_if_same_protocol : false,
+  follow_if_same_location : false
 }
 
 var aliased = {
@@ -2943,33 +3032,6 @@ function keys_by_type(type) {
   }).filter(function(el) { return el })
 }
 
-function parse_content_type(header) {
-  if (!header || header === '') return {};
-
-  var found, charset = 'iso-8859-1', arr = header.split(';');
-
-  if (arr.length > 1 && (found = arr[1].match(/charset=(.+)/)))
-    charset = found[1];
-
-  return { type: arr[0], charset: charset };
-}
-
-function is_stream(obj) {
-  return typeof obj.pipe === 'function';
-}
-
-function get_stream_length(stream, given_length, cb) {
-  if (given_length > 0)
-    return cb(given_length);
-
-  if (stream.end !== void 0 && stream.end !== Infinity && stream.start !== void 0)
-    return cb((stream.end + 1) - (stream.start || 0));
-
-  fs.stat(stream.path, function(err, stat) {
-    cb(stat ? stat.size - (stream.start || 0) : null);
-  });
-}
-
 //////////////////////////////////////////
 // the main act
 
@@ -2981,7 +3043,7 @@ function Needle(method, uri, data, options, callback) {
   if (typeof uri !== 'string')
     throw new TypeError('URL must be a string, not ' + uri);
 
-  this.method   = method;
+  this.method   = method.toLowerCase();
   this.uri      = uri;
   this.data     = data;
 
@@ -3021,8 +3083,11 @@ Needle.prototype.setup = function(uri, options) {
 
   var config = {
     http_opts : {
-      localAddress: get_option('localAddress', undefined)
+      agent: get_option('agent', defaults.agent),
+      localAddress: get_option('localAddress', undefined),
+      lookup: get_option('lookup', undefined)
     }, // passed later to http.request() directly
+    headers   : {},
     output    : options.output,
     proxy     : get_option('proxy', defaults.proxy),
     parser    : get_option('parse_response', defaults.parse_response),
@@ -3040,19 +3105,22 @@ Needle.prototype.setup = function(uri, options) {
   // populate http_opts with given TLS options
   tls_options.split(' ').forEach(function(key) {
     if (typeof options[key] != 'undefined') {
-      config.http_opts[key] = options[key];
-      if (typeof options.agent == 'undefined')
-        config.http_opts.agent = false; // otherwise tls options are skipped
+      if (config.http_opts.agent) { // pass option to existing agent
+        config.http_opts.agent.options[key] = options[key];
+      } else {
+        config.http_opts[key] = options[key];
+      }
     }
   });
 
   //////////////////////////////////////////////////
   // headers, cookies
 
-  config.headers = {
-    'accept'     : options.accept     || defaults.accept,
-    'user-agent' : options.user_agent || defaults.user_agent
-  }
+  for (var key in defaults.headers)
+    config.headers[key] = defaults.headers[key];
+
+  config.headers['accept'] = options.accept || defaults.accept;
+  config.headers['user-agent'] = options.user_agent || defaults.user_agent;
 
   if (options.content_type)
     config.headers['content-type'] = options.content_type;
@@ -3062,7 +3130,7 @@ Needle.prototype.setup = function(uri, options) {
     config.headers['connection'] = options.connection || 'close';
 
   if ((options.compressed || defaults.compressed) && typeof zlib != 'undefined')
-    config.headers['accept-encoding'] = 'gzip,deflate';
+    config.headers['accept-encoding'] = decompressors['br'] ? 'gzip, deflate, br' : 'gzip, deflate';
 
   if (options.cookies)
     config.headers['cookie'] = cookies.write(options.cookies);
@@ -3084,24 +3152,33 @@ Needle.prototype.setup = function(uri, options) {
     }
   }
 
+  var env_proxy = utils.get_env_var(['HTTP_PROXY', 'HTTPS_PROXY'], true);
+  if (!config.proxy && env_proxy) config.proxy = env_proxy;
+
   // if proxy is present, set auth header from either url or proxy_user option.
   if (config.proxy) {
-    if (config.proxy.indexOf('http') === -1)
-      config.proxy = 'http://' + config.proxy;
+    if (utils.should_proxy_to(uri)) {
+      if (config.proxy.indexOf('http') === -1)
+        config.proxy = 'http://' + config.proxy;
 
-    if (config.proxy.indexOf('@') !== -1) {
-      var proxy = (url.parse(config.proxy).auth || '').split(':');
-      options.proxy_user = proxy[0];
-      options.proxy_pass = proxy[1];
+      if (config.proxy.indexOf('@') !== -1) {
+        var proxy = (url.parse(config.proxy).auth || '').split(':');
+        options.proxy_user = proxy[0];
+        options.proxy_pass = proxy[1];
+      }
+
+      if (options.proxy_user)
+        config.headers['proxy-authorization'] = auth.basic(options.proxy_user, options.proxy_pass);
+    } else {
+      delete config.proxy;
     }
-
-    if (options.proxy_user)
-      config.headers['proxy-authorization'] = auth.basic(options.proxy_user, options.proxy_pass);
   }
 
   // now that all our headers are set, overwrite them if instructed.
   for (var h in options.headers)
     config.headers[h.toLowerCase()] = options.headers[h];
+
+  config.uri_modifier = get_option('uri_modifier', null);
 
   return config;
 }
@@ -3137,16 +3214,16 @@ Needle.prototype.start = function() {
         next(parts);
       });
 
-    } else if (is_stream(data)) {
+    } else if (utils.is_stream(data)) {
 
-      if (method.toUpperCase() == 'GET')
+      if (method == 'get')
         throw new Error('Refusing to pipe() a stream via GET. Did you mean .post?');
 
       if (config.stream_length > 0 || (config.stream_length === 0 && data.path)) {
         // ok, let's get the stream's length and set it as the content-length header.
         // this prevents some servers from cutting us off before all the data is sent.
         waiting = true;
-        get_stream_length(data, config.stream_length, function(length) {
+        utils.get_stream_length(data, config.stream_length, function(length) {
           data.length = length;
           next(data);
         })
@@ -3161,7 +3238,7 @@ Needle.prototype.start = function() {
 
       body = data; // use the raw buffer as request body.
 
-    } else if (method.toUpperCase() == 'GET' && !json) {
+    } else if (method == 'get' && !json) {
 
       // append the data to the URI as a querystring.
       uri = uri.replace(/\?.*|$/, '?' + stringify(data));
@@ -3237,7 +3314,7 @@ Needle.prototype.should_follow = function(location, config, original) {
   }
 
   // first, check whether the requested location is actually different from the original
-  if (location === original)
+  if (!config.follow_if_same_location && location === original)
     return false;
 
   if (config.follow_if_same_host && !matches('host'))
@@ -3251,7 +3328,14 @@ Needle.prototype.should_follow = function(location, config, original) {
 
 Needle.prototype.send_request = function(count, method, uri, config, post_data, out, callback) {
 
-  var timer,
+  if (typeof config.uri_modifier === 'function') {
+    var modified_uri = config.uri_modifier(uri);
+    debug('Modifying request URI', uri + ' => ' + modified_uri);
+    uri = modified_uri;
+  }
+
+  var request,
+      timer,
       returned     = 0,
       self         = this,
       request_opts = this.get_request_opts(method, uri, config),
@@ -3263,6 +3347,14 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
 
     if (timer) clearTimeout(timer);
     request.removeListener('error', had_error);
+    out.done = true;
+
+    // An error can still be fired after closing.  In particular, on macOS.
+    // See also:
+    //  - https://github.com/tomas/needle/issues/391
+    //  - https://github.com/less/less.js/issues/3693
+    //  - https://github.com/nodejs/node/issues/27916
+    request.once('error', function() {});
 
     if (callback)
       return callback(err, resp, resp ? resp.body : undefined);
@@ -3270,6 +3362,11 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     // NOTE: this event used to be called 'end', but the behaviour was confusing
     // when errors ocurred, because the stream would still emit an 'end' event.
     out.emit('done', err);
+
+    // trigger the 'done' event on streams we're being piped to, if any
+    var pipes = out._readableState.pipes || [];
+    if (!pipes.forEach) pipes = [pipes];
+    pipes.forEach(function(st) { st.emit('done', err); })
   }
 
   function had_error(err) {
@@ -3290,18 +3387,9 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     }, milisecs);
   }
 
-  // handle errors on the underlying socket, that may be closed while writing
-  // for an example case, see test/long_string_spec.js. we make sure this
-  // scenario ocurred by verifying the socket's writable & destroyed states.
-  function on_socket_end() {
-    if (!this.writable && this.destroyed === false) {
-      this.destroy();
-      had_error(new Error('Remote end closed socket abruptly.'))
-    }
-  }
 
   debug('Making request #' + count, request_opts);
-  var request = protocol.request(request_opts, function(resp) {
+  request = protocol.request(request_opts, function(resp) {
 
     var headers = resp.headers;
     debug('Got response', resp.statusCode, headers);
@@ -3311,8 +3399,8 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
 
     // if we got cookies, parse them unless we were instructed not to. make sure to include any
     // cookies that might have been set on previous redirects.
-    if (config.parse_cookies && (headers['set-cookie'] || config.stored_cookies)) {
-      resp.cookies = extend(config.stored_cookies || {}, cookies.read(headers['set-cookie']));
+    if (config.parse_cookies && (headers['set-cookie'] || config.previous_resp_cookies)) {
+      resp.cookies = extend(config.previous_resp_cookies || {}, cookies.read(headers['set-cookie']));
       debug('Got cookies', resp.cookies);
     }
 
@@ -3331,10 +3419,17 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
           delete config.headers['content-length']; // in case the original was a multipart POST request.
         }
 
-        // if follow_set_cookies is true, make sure to put any cookies in the next request's headers.
-        if (config.follow_set_cookies && resp.cookies) {
-          config.stored_cookies    = resp.cookies;
-          config.headers['cookie'] = cookies.write(resp.cookies);
+        // if follow_set_cookies is true, insert cookies in the next request's headers.
+        // we set both the original request cookies plus any response cookies we might have received.
+        if (config.follow_set_cookies && utils.host_and_ports_match(headers.location, uri)) {
+          var request_cookies = cookies.read(config.headers['cookie']);
+          config.previous_resp_cookies = resp.cookies;
+          if (Object.keys(request_cookies).length || Object.keys(resp.cookies || {}).length) {
+            config.headers['cookie'] = cookies.write(extend(request_cookies, resp.cookies));
+          }
+        } else if (config.headers['cookie']) {
+          debug('Clearing original request cookie', config.headers['cookie']);
+          delete config.headers['cookie'];
         }
 
         if (config.follow_set_referer)
@@ -3342,8 +3437,9 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
 
         config.headers['host'] = null; // clear previous Host header to avoid conflicts.
 
-        debug('Redirecting to ' + url.resolve(uri, headers.location));
-        return self.send_request(++count, method, url.resolve(uri, headers.location), config, post_data, out, callback);
+        var redirect_url = utils.resolve_url(headers.location, uri);
+        debug('Redirecting to ' +  redirect_url.toString());
+        return self.send_request(++count, method, redirect_url.toString(), config, post_data, out, callback);
       } else if (config.follow_max > 0) {
         return done(new Error('Max redirects reached. Possible loop in: ' + headers.location));
       }
@@ -3366,13 +3462,13 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     out.emit('headers', headers);
 
     var pipeline      = [],
-        mime          = parse_content_type(headers['content-type']),
-        text_response = mime.type && mime.type.indexOf('text/') != -1;
+        mime          = utils.parse_content_type(headers['content-type']),
+        text_response = mime.type && (mime.type.indexOf('text/') != -1 || !!mime.type.match(/(\/|\+)(xml|json)$/));
 
     // To start, if our body is compressed and we're able to inflate it, do it.
     if (headers['content-encoding'] && decompressors[headers['content-encoding']]) {
 
-      var decompressor = decompressors[headers['content-encoding']](zlib_options);
+      var decompressor = decompressors[headers['content-encoding']]();
 
       // make sure we catch errors triggered by the decompressor.
       decompressor.on('error', had_error);
@@ -3397,19 +3493,21 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
 
     // If we're not parsing, and unless decoding was disabled, we'll try
     // decoding non UTF-8 bodies to UTF-8, using the iconv-lite library.
-    } else if (text_response && config.decode_response
-      && mime.charset && !mime.charset.match(/utf-?8$/i)) {
-        pipeline.push(decoder(mime.charset));
+    } else if (text_response && config.decode_response && mime.charset) {
+      pipeline.push(decoder(mime.charset));
     }
 
     // And `out` is the stream we finally push the decoded/parsed output to.
     pipeline.push(out);
 
     // Now, release the kraken!
-    var tmp = resp;
-    while (pipeline.length) {
-      tmp = tmp.pipe(pipeline.shift());
-    }
+    utils.pump_streams([resp].concat(pipeline), function(err) {
+      if (err) debug(err)
+
+      // on node v8.x, if an error ocurrs on the receiving end,
+      // then we want to abort the request to avoid having dangling sockets
+      if (err && err.message == 'write after end') request.destroy();
+    });
 
     // If the user has requested and output file, pipe the output stream to it.
     // In stream mode, we will still get the response stream to play with.
@@ -3450,7 +3548,6 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
 
       // Gather and count the amount of (raw) bytes using a PassThrough stream.
       var clean_pipe = new stream.PassThrough();
-      resp.pipe(clean_pipe);
 
       clean_pipe.on('readable', function() {
         var chunk;
@@ -3459,6 +3556,10 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
           resp.raw.push(chunk);
         }
       })
+
+      utils.pump_streams([resp, clean_pipe], function(err) {
+        if (err) debug(err);
+      });
 
       // Listen on the 'readable' event to aggregate the chunks, but only if
       // file output wasn't requested. Otherwise we'd have two stream readers.
@@ -3507,13 +3608,20 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
       // is triggered after all data has been written to it.
       if (out.file) {
         out.file.on('close', function() {
-          done(null, resp, resp.body);
+          done(null, resp);
         })
       } else { // elvis has left the building.
-        done(null, resp, resp.body);
+        done(null, resp);
       }
 
     });
+
+    // out.on('error', function(err) {
+    //   had_error(err);
+    //   if (err.code == 'ERR_STREAM_DESTROYED' || err.code == 'ERR_STREAM_PREMATURE_CLOSE') {
+    //     request.abort();
+    //   }
+    // })
 
   }); // end request call
 
@@ -3528,7 +3636,7 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     if (timer) clearTimeout(timer);
   })
 
-  // handle socket 'end' event to ensure we don't get delayed EPIPE errors.
+  // set response timeout once we get a valid socket
   request.once('socket', function(socket) {
     if (socket.connecting) {
       socket.once('connect', function() {
@@ -3537,17 +3645,13 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     } else {
       set_timeout('response', config.response_timeout);
     }
-
-    // console.log(socket);
-    if (!socket.on_socket_end) {
-      socket.on_socket_end = on_socket_end;
-      socket.once('end', function() { process.nextTick(on_socket_end.bind(socket)) });
-    }
   })
 
   if (post_data) {
-    if (is_stream(post_data)) {
-      post_data.pipe(request);
+    if (utils.is_stream(post_data)) {
+      utils.pump_streams([post_data, request], function(err) {
+        if (err) debug(err);
+      });
     } else {
       request.write(post_data, config.encoding);
       request.end();
@@ -3556,6 +3660,7 @@ Needle.prototype.send_request = function(count, method, uri, config, post_data, 
     request.end();
   }
 
+  out.abort = function() { request.abort() }; // easier access
   out.request = request;
   return out;
 }
@@ -3572,7 +3677,7 @@ if (typeof Promise !== 'undefined') {
     else
       verb = args.shift();
 
-    if (verb.match(/get|head/) && args.length == 2)
+    if (verb.match(/get|head/i) && args.length == 2)
       args.splice(1, 0, null); // assume no data if head/get with two args (url, options)
 
     return new Promise(function(resolve, reject) {
@@ -3590,7 +3695,7 @@ module.exports.defaults = function(obj) {
     var target_key = aliased.options[key] || key;
 
     if (defaults.hasOwnProperty(target_key) && typeof obj[key] != 'undefined') {
-      if (target_key != 'parse_response' && target_key != 'proxy') {
+      if (target_key != 'parse_response' && target_key != 'proxy' && target_key != 'agent') {
         // ensure type matches the original, except for proxy/parse_response that can be null/bool or string
         var valid_type = defaults[target_key].constructor.name;
 
@@ -3599,7 +3704,7 @@ module.exports.defaults = function(obj) {
       }
       defaults[target_key] = obj[key];
     } else {
-      throw new Error('Invalid property for defaults:' + target_key);      
+      throw new Error('Invalid property for defaults:' + target_key);
     }
   }
 
@@ -3622,6 +3727,123 @@ module.exports.request = function(method, uri, data, opts, callback) {
   return new Needle(method, uri, data, opts, callback).start();
 };
 
+
+/***/ }),
+
+/***/ 275:
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+var fs = __webpack_require__(747),
+    url = __webpack_require__(835),
+    stream = __webpack_require__(413);
+
+function resolve_url(href, base) {
+  if (url.URL)
+    return new url.URL(href, base);
+
+  // older Node version (< v6.13)
+  return base ? url.resolve(base, href) : href;
+}
+
+function host_and_ports_match(url1, url2) {
+  if (url1.indexOf('http') < 0) url1 = 'http://' + url1;
+  if (url2.indexOf('http') < 0) url2 = 'http://' + url2;
+  var a = url.parse(url1), b = url.parse(url2);
+
+  return a.host == b.host
+    && String(a.port || (a.protocol == 'https:' ? 443 : 80))
+    == String(b.port || (b.protocol == 'https:' ? 443 : 80));
+}
+
+// returns false if a no_proxy host or pattern matches given url
+function should_proxy_to(uri) {
+  var no_proxy = get_env_var(['NO_PROXY'], true);
+  if (!no_proxy) return true;
+
+  // previous (naive, simple) strategy
+  // var host, hosts = no_proxy.split(',');
+  // for (var i in hosts) {
+  //   host = hosts[i];
+  //   if (host_and_ports_match(host, uri)) {
+  //     return false;
+  //   }
+  // }
+
+  var pattern, pattern_list = no_proxy.split(/[\s,]+/);
+  for (var i in pattern_list) {
+    pattern = pattern_list[i];
+    if (pattern.trim().length == 0) continue;
+
+    // replace leading dot by asterisk, escape dots and finally replace asterisk by .*
+    var regex = new RegExp(pattern.replace(/^\./, "*").replace(/[.]/g, '\\$&').replace(/\*/g, '.*'))
+    if (uri.match(regex)) return false;
+  }
+
+  return true;
+}
+
+function get_env_var(keys, try_lower) {
+  var val, i = -1, env = process.env;
+  while (!val && i < keys.length-1) {
+    val = env[keys[++i]];
+    if (!val && try_lower) {
+      val = env[keys[i].toLowerCase()];
+    }
+  }
+  return val;
+}
+
+function parse_content_type(header) {
+  if (!header || header === '') return {};
+
+  var found, charset = 'utf8', arr = header.split(';');
+
+  if (arr.length > 1 && (found = arr[1].match(/charset=(.+)/)))
+    charset = found[1];
+
+  return { type: arr[0], charset: charset };
+}
+
+function is_stream(obj) {
+  return typeof obj.pipe === 'function';
+}
+
+function get_stream_length(stream, given_length, cb) {
+  if (given_length > 0)
+    return cb(given_length);
+
+  if (stream.end !== void 0 && stream.end !== Infinity && stream.start !== void 0)
+    return cb((stream.end + 1) - (stream.start || 0));
+
+  fs.stat(stream.path, function(err, stat) {
+    cb(stat ? stat.size - (stream.start || 0) : null);
+  });
+}
+
+function pump_streams(streams, cb) {
+  if (stream.pipeline)
+    return stream.pipeline.apply(null, streams.concat(cb));
+
+  var tmp = streams.shift();
+  while (streams.length) {
+    tmp = tmp.pipe(streams.shift());
+    tmp.once('error', function(e) {
+      cb && cb(e);
+      cb = null;
+    })
+  }
+}
+
+module.exports = {
+  resolve_url: resolve_url,
+  get_env_var: get_env_var,
+  host_and_ports_match: host_and_ports_match,
+  should_proxy_to: should_proxy_to,
+  parse_content_type: parse_content_type,
+  is_stream: is_stream,
+  get_stream_length: get_stream_length,
+  pump_streams: pump_streams
+}
 
 /***/ }),
 
@@ -3674,6 +3896,7 @@ module.exports = resolveCommand;
 // We support Browserify by skipping automatic module discovery and requiring modules directly.
 var modules = [
     __webpack_require__(162),
+    __webpack_require__(640),
     __webpack_require__(797),
     __webpack_require__(190),
     __webpack_require__(877),
@@ -3683,7 +3906,7 @@ var modules = [
     __webpack_require__(92),
 ];
 
-// Put all encoding/alias/codec definitions to single object and export it. 
+// Put all encoding/alias/codec definitions to single object and export it.
 for (var i = 0; i < modules.length; i++) {
     var module = modules[i];
     for (var enc in module)
@@ -3714,125 +3937,113 @@ module.exports = require("string_decoder");
 "use strict";
 
 
-var Buffer = __webpack_require__(293).Buffer,
-    Transform = __webpack_require__(413).Transform;
+var Buffer = __webpack_require__(215).Buffer;
 
+// NOTE: Due to 'stream' module being pretty large (~100Kb, significant in browser environments), 
+// we opt to dependency-inject it instead of creating a hard dependency.
+module.exports = function(stream_module) {
+    var Transform = stream_module.Transform;
 
-// == Exports ==================================================================
-module.exports = function(iconv) {
-    
-    // Additional Public API.
-    iconv.encodeStream = function encodeStream(encoding, options) {
-        return new IconvLiteEncoderStream(iconv.getEncoder(encoding, options), options);
+    // == Encoder stream =======================================================
+
+    function IconvLiteEncoderStream(conv, options) {
+        this.conv = conv;
+        options = options || {};
+        options.decodeStrings = false; // We accept only strings, so we don't need to decode them.
+        Transform.call(this, options);
     }
 
-    iconv.decodeStream = function decodeStream(encoding, options) {
-        return new IconvLiteDecoderStream(iconv.getDecoder(encoding, options), options);
+    IconvLiteEncoderStream.prototype = Object.create(Transform.prototype, {
+        constructor: { value: IconvLiteEncoderStream }
+    });
+
+    IconvLiteEncoderStream.prototype._transform = function(chunk, encoding, done) {
+        if (typeof chunk != 'string')
+            return done(new Error("Iconv encoding stream needs strings as its input."));
+        try {
+            var res = this.conv.write(chunk);
+            if (res && res.length) this.push(res);
+            done();
+        }
+        catch (e) {
+            done(e);
+        }
     }
 
-    iconv.supportsStreams = true;
+    IconvLiteEncoderStream.prototype._flush = function(done) {
+        try {
+            var res = this.conv.end();
+            if (res && res.length) this.push(res);
+            done();
+        }
+        catch (e) {
+            done(e);
+        }
+    }
+
+    IconvLiteEncoderStream.prototype.collect = function(cb) {
+        var chunks = [];
+        this.on('error', cb);
+        this.on('data', function(chunk) { chunks.push(chunk); });
+        this.on('end', function() {
+            cb(null, Buffer.concat(chunks));
+        });
+        return this;
+    }
 
 
-    // Not published yet.
-    iconv.IconvLiteEncoderStream = IconvLiteEncoderStream;
-    iconv.IconvLiteDecoderStream = IconvLiteDecoderStream;
-    iconv._collect = IconvLiteDecoderStream.prototype.collect;
+    // == Decoder stream =======================================================
+
+    function IconvLiteDecoderStream(conv, options) {
+        this.conv = conv;
+        options = options || {};
+        options.encoding = this.encoding = 'utf8'; // We output strings.
+        Transform.call(this, options);
+    }
+
+    IconvLiteDecoderStream.prototype = Object.create(Transform.prototype, {
+        constructor: { value: IconvLiteDecoderStream }
+    });
+
+    IconvLiteDecoderStream.prototype._transform = function(chunk, encoding, done) {
+        if (!Buffer.isBuffer(chunk) && !(chunk instanceof Uint8Array))
+            return done(new Error("Iconv decoding stream needs buffers as its input."));
+        try {
+            var res = this.conv.write(chunk);
+            if (res && res.length) this.push(res, this.encoding);
+            done();
+        }
+        catch (e) {
+            done(e);
+        }
+    }
+
+    IconvLiteDecoderStream.prototype._flush = function(done) {
+        try {
+            var res = this.conv.end();
+            if (res && res.length) this.push(res, this.encoding);                
+            done();
+        }
+        catch (e) {
+            done(e);
+        }
+    }
+
+    IconvLiteDecoderStream.prototype.collect = function(cb) {
+        var res = '';
+        this.on('error', cb);
+        this.on('data', function(chunk) { res += chunk; });
+        this.on('end', function() {
+            cb(null, res);
+        });
+        return this;
+    }
+
+    return {
+        IconvLiteEncoderStream: IconvLiteEncoderStream,
+        IconvLiteDecoderStream: IconvLiteDecoderStream,
+    };
 };
-
-
-// == Encoder stream =======================================================
-function IconvLiteEncoderStream(conv, options) {
-    this.conv = conv;
-    options = options || {};
-    options.decodeStrings = false; // We accept only strings, so we don't need to decode them.
-    Transform.call(this, options);
-}
-
-IconvLiteEncoderStream.prototype = Object.create(Transform.prototype, {
-    constructor: { value: IconvLiteEncoderStream }
-});
-
-IconvLiteEncoderStream.prototype._transform = function(chunk, encoding, done) {
-    if (typeof chunk != 'string')
-        return done(new Error("Iconv encoding stream needs strings as its input."));
-    try {
-        var res = this.conv.write(chunk);
-        if (res && res.length) this.push(res);
-        done();
-    }
-    catch (e) {
-        done(e);
-    }
-}
-
-IconvLiteEncoderStream.prototype._flush = function(done) {
-    try {
-        var res = this.conv.end();
-        if (res && res.length) this.push(res);
-        done();
-    }
-    catch (e) {
-        done(e);
-    }
-}
-
-IconvLiteEncoderStream.prototype.collect = function(cb) {
-    var chunks = [];
-    this.on('error', cb);
-    this.on('data', function(chunk) { chunks.push(chunk); });
-    this.on('end', function() {
-        cb(null, Buffer.concat(chunks));
-    });
-    return this;
-}
-
-
-// == Decoder stream =======================================================
-function IconvLiteDecoderStream(conv, options) {
-    this.conv = conv;
-    options = options || {};
-    options.encoding = this.encoding = 'utf8'; // We output strings.
-    Transform.call(this, options);
-}
-
-IconvLiteDecoderStream.prototype = Object.create(Transform.prototype, {
-    constructor: { value: IconvLiteDecoderStream }
-});
-
-IconvLiteDecoderStream.prototype._transform = function(chunk, encoding, done) {
-    if (!Buffer.isBuffer(chunk))
-        return done(new Error("Iconv decoding stream needs buffers as its input."));
-    try {
-        var res = this.conv.write(chunk);
-        if (res && res.length) this.push(res, this.encoding);
-        done();
-    }
-    catch (e) {
-        done(e);
-    }
-}
-
-IconvLiteDecoderStream.prototype._flush = function(done) {
-    try {
-        var res = this.conv.end();
-        if (res && res.length) this.push(res, this.encoding);                
-        done();
-    }
-    catch (e) {
-        done(e);
-    }
-}
-
-IconvLiteDecoderStream.prototype.collect = function(cb) {
-    var res = '';
-    this.on('error', cb);
-    this.on('data', function(chunk) { res += chunk; });
-    this.on('end', function() {
-        cb(null, res);
-    });
-    return this;
-}
-
 
 
 /***/ }),
@@ -3841,231 +4052,6 @@ IconvLiteDecoderStream.prototype.collect = function(cb) {
 /***/ (function() {
 
 eval("require")("spawn-sync");
-
-
-/***/ }),
-
-/***/ 329:
-/***/ (function(module, __unusedexports, __webpack_require__) {
-
-"use strict";
-
-var Buffer = __webpack_require__(293).Buffer;
-// Note: not polyfilled with safer-buffer on a purpose, as overrides Buffer
-
-// == Extend Node primitives to use iconv-lite =================================
-
-module.exports = function (iconv) {
-    var original = undefined; // Place to keep original methods.
-
-    // Node authors rewrote Buffer internals to make it compatible with
-    // Uint8Array and we cannot patch key functions since then.
-    // Note: this does use older Buffer API on a purpose
-    iconv.supportsNodeEncodingsExtension = !(Buffer.from || new Buffer(0) instanceof Uint8Array);
-
-    iconv.extendNodeEncodings = function extendNodeEncodings() {
-        if (original) return;
-        original = {};
-
-        if (!iconv.supportsNodeEncodingsExtension) {
-            console.error("ACTION NEEDED: require('iconv-lite').extendNodeEncodings() is not supported in your version of Node");
-            console.error("See more info at https://github.com/ashtuchkin/iconv-lite/wiki/Node-v4-compatibility");
-            return;
-        }
-
-        var nodeNativeEncodings = {
-            'hex': true, 'utf8': true, 'utf-8': true, 'ascii': true, 'binary': true, 
-            'base64': true, 'ucs2': true, 'ucs-2': true, 'utf16le': true, 'utf-16le': true,
-        };
-
-        Buffer.isNativeEncoding = function(enc) {
-            return enc && nodeNativeEncodings[enc.toLowerCase()];
-        }
-
-        // -- SlowBuffer -----------------------------------------------------------
-        var SlowBuffer = __webpack_require__(293).SlowBuffer;
-
-        original.SlowBufferToString = SlowBuffer.prototype.toString;
-        SlowBuffer.prototype.toString = function(encoding, start, end) {
-            encoding = String(encoding || 'utf8').toLowerCase();
-
-            // Use native conversion when possible
-            if (Buffer.isNativeEncoding(encoding))
-                return original.SlowBufferToString.call(this, encoding, start, end);
-
-            // Otherwise, use our decoding method.
-            if (typeof start == 'undefined') start = 0;
-            if (typeof end == 'undefined') end = this.length;
-            return iconv.decode(this.slice(start, end), encoding);
-        }
-
-        original.SlowBufferWrite = SlowBuffer.prototype.write;
-        SlowBuffer.prototype.write = function(string, offset, length, encoding) {
-            // Support both (string, offset, length, encoding)
-            // and the legacy (string, encoding, offset, length)
-            if (isFinite(offset)) {
-                if (!isFinite(length)) {
-                    encoding = length;
-                    length = undefined;
-                }
-            } else {  // legacy
-                var swap = encoding;
-                encoding = offset;
-                offset = length;
-                length = swap;
-            }
-
-            offset = +offset || 0;
-            var remaining = this.length - offset;
-            if (!length) {
-                length = remaining;
-            } else {
-                length = +length;
-                if (length > remaining) {
-                    length = remaining;
-                }
-            }
-            encoding = String(encoding || 'utf8').toLowerCase();
-
-            // Use native conversion when possible
-            if (Buffer.isNativeEncoding(encoding))
-                return original.SlowBufferWrite.call(this, string, offset, length, encoding);
-
-            if (string.length > 0 && (length < 0 || offset < 0))
-                throw new RangeError('attempt to write beyond buffer bounds');
-
-            // Otherwise, use our encoding method.
-            var buf = iconv.encode(string, encoding);
-            if (buf.length < length) length = buf.length;
-            buf.copy(this, offset, 0, length);
-            return length;
-        }
-
-        // -- Buffer ---------------------------------------------------------------
-
-        original.BufferIsEncoding = Buffer.isEncoding;
-        Buffer.isEncoding = function(encoding) {
-            return Buffer.isNativeEncoding(encoding) || iconv.encodingExists(encoding);
-        }
-
-        original.BufferByteLength = Buffer.byteLength;
-        Buffer.byteLength = SlowBuffer.byteLength = function(str, encoding) {
-            encoding = String(encoding || 'utf8').toLowerCase();
-
-            // Use native conversion when possible
-            if (Buffer.isNativeEncoding(encoding))
-                return original.BufferByteLength.call(this, str, encoding);
-
-            // Slow, I know, but we don't have a better way yet.
-            return iconv.encode(str, encoding).length;
-        }
-
-        original.BufferToString = Buffer.prototype.toString;
-        Buffer.prototype.toString = function(encoding, start, end) {
-            encoding = String(encoding || 'utf8').toLowerCase();
-
-            // Use native conversion when possible
-            if (Buffer.isNativeEncoding(encoding))
-                return original.BufferToString.call(this, encoding, start, end);
-
-            // Otherwise, use our decoding method.
-            if (typeof start == 'undefined') start = 0;
-            if (typeof end == 'undefined') end = this.length;
-            return iconv.decode(this.slice(start, end), encoding);
-        }
-
-        original.BufferWrite = Buffer.prototype.write;
-        Buffer.prototype.write = function(string, offset, length, encoding) {
-            var _offset = offset, _length = length, _encoding = encoding;
-            // Support both (string, offset, length, encoding)
-            // and the legacy (string, encoding, offset, length)
-            if (isFinite(offset)) {
-                if (!isFinite(length)) {
-                    encoding = length;
-                    length = undefined;
-                }
-            } else {  // legacy
-                var swap = encoding;
-                encoding = offset;
-                offset = length;
-                length = swap;
-            }
-
-            encoding = String(encoding || 'utf8').toLowerCase();
-
-            // Use native conversion when possible
-            if (Buffer.isNativeEncoding(encoding))
-                return original.BufferWrite.call(this, string, _offset, _length, _encoding);
-
-            offset = +offset || 0;
-            var remaining = this.length - offset;
-            if (!length) {
-                length = remaining;
-            } else {
-                length = +length;
-                if (length > remaining) {
-                    length = remaining;
-                }
-            }
-
-            if (string.length > 0 && (length < 0 || offset < 0))
-                throw new RangeError('attempt to write beyond buffer bounds');
-
-            // Otherwise, use our encoding method.
-            var buf = iconv.encode(string, encoding);
-            if (buf.length < length) length = buf.length;
-            buf.copy(this, offset, 0, length);
-            return length;
-
-            // TODO: Set _charsWritten.
-        }
-
-
-        // -- Readable -------------------------------------------------------------
-        if (iconv.supportsStreams) {
-            var Readable = __webpack_require__(413).Readable;
-
-            original.ReadableSetEncoding = Readable.prototype.setEncoding;
-            Readable.prototype.setEncoding = function setEncoding(enc, options) {
-                // Use our own decoder, it has the same interface.
-                // We cannot use original function as it doesn't handle BOM-s.
-                this._readableState.decoder = iconv.getDecoder(enc, options);
-                this._readableState.encoding = enc;
-            }
-
-            Readable.prototype.collect = iconv._collect;
-        }
-    }
-
-    // Remove iconv-lite Node primitive extensions.
-    iconv.undoExtendNodeEncodings = function undoExtendNodeEncodings() {
-        if (!iconv.supportsNodeEncodingsExtension)
-            return;
-        if (!original)
-            throw new Error("require('iconv-lite').undoExtendNodeEncodings(): Nothing to undo; extendNodeEncodings() is not called.")
-
-        delete Buffer.isNativeEncoding;
-
-        var SlowBuffer = __webpack_require__(293).SlowBuffer;
-
-        SlowBuffer.prototype.toString = original.SlowBufferToString;
-        SlowBuffer.prototype.write = original.SlowBufferWrite;
-
-        Buffer.isEncoding = original.BufferIsEncoding;
-        Buffer.byteLength = original.BufferByteLength;
-        Buffer.prototype.toString = original.BufferToString;
-        Buffer.prototype.write = original.BufferWrite;
-
-        if (iconv.supportsStreams) {
-            var Readable = __webpack_require__(413).Readable;
-
-            Readable.prototype.setEncoding = original.ReadableSetEncoding;
-            delete Readable.prototype.collect;
-        }
-
-        original = undefined;
-    }
-}
 
 
 /***/ }),
@@ -4201,7 +4187,7 @@ exports.write = writeCookieString;
 /***/ 360:
 /***/ (function(module) {
 
-module.exports = {"_args":[["needle@2.4.0","/Users/amir/projects/release-notes-preview"]],"_from":"needle@2.4.0","_id":"needle@2.4.0","_inBundle":false,"_integrity":"sha512-4Hnwzr3mi5L97hMYeNl8wRW/Onhy4nUKR/lVemJ8gJedxxUyBLm9kkrDColJvoSfwi0jCNhD+xCdOtiGDQiRZg==","_location":"/needle","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"needle@2.4.0","name":"needle","escapedName":"needle","rawSpec":"2.4.0","saveSpec":null,"fetchSpec":"2.4.0"},"_requiredBy":["/"],"_resolved":"https://registry.npmjs.org/needle/-/needle-2.4.0.tgz","_spec":"2.4.0","_where":"/Users/amir/projects/release-notes-preview","author":{"name":"Tomás Pollak","email":"tomas@forkhq.com"},"bin":{"needle":"bin/needle"},"bugs":{"url":"https://github.com/tomas/needle/issues"},"dependencies":{"debug":"^3.2.6","iconv-lite":"^0.4.4","sax":"^1.2.4"},"description":"The leanest and most handsome HTTP client in the Nodelands.","devDependencies":{"JSONStream":"^1.3.5","jschardet":"^1.6.0","mocha":"^5.2.0","q":"^1.5.1","should":"^13.2.3","sinon":"^2.3.0","xml2js":"^0.4.19"},"directories":{"lib":"./lib"},"engines":{"node":">= 4.4.x"},"homepage":"https://github.com/tomas/needle#readme","keywords":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"license":"MIT","main":"./lib/needle","name":"needle","repository":{"type":"git","url":"git+https://github.com/tomas/needle.git"},"scripts":{"test":"mocha test"},"tags":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"version":"2.4.0"};
+module.exports = {"name":"needle","version":"3.2.0","description":"The leanest and most handsome HTTP client in the Nodelands.","keywords":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"tags":["http","https","simple","request","client","multipart","upload","proxy","deflate","timeout","charset","iconv","cookie","redirect"],"author":"Tomás Pollak <tomas@forkhq.com>","repository":{"type":"git","url":"https://github.com/tomas/needle.git"},"dependencies":{"debug":"^3.2.6","iconv-lite":"^0.6.3","sax":"^1.2.4"},"devDependencies":{"JSONStream":"^1.3.5","jschardet":"^1.6.0","mocha":"^5.2.0","pump":"^3.0.0","q":"^1.5.1","should":"^13.2.3","sinon":"^2.3.0","xml2js":"^0.4.19"},"scripts":{"test":"mocha test"},"directories":{"lib":"./lib"},"main":"./lib/needle","bin":{"needle":"./bin/needle"},"license":"MIT","engines":{"node":">= 4.4.x"}};
 
 /***/ }),
 
@@ -4358,7 +4344,7 @@ var digest = {};
 
 digest.parse_header = function(header) {
   var challenge = {},
-      matches   = header.match(/([a-z0-9_-]+)="?([a-z0-9=\/\.@\s-]+)"?/gi);
+      matches   = header.match(/([a-z0-9_-]+)="?([a-z0-9_=\/\.@\s-\+:)()]+)"?/gi);
 
   for (var i = 0, l = matches.length; i < l; i++) {
     var parts = matches[i].split('='),
@@ -4397,9 +4383,10 @@ digest.generate = function(header, user, pass, method, path) {
     cnonce = md5(Math.random().toString(36)).substr(0, 8);
     nc     = digest.update_nc(nc);
     resp   = resp.concat(nc, cnonce);
+    resp   = resp.concat(challenge.qop, ha2);
+  } else {
+    resp   = resp.concat(ha2);
   }
-
-  resp = resp.concat(challenge.qop, ha2);
 
   var params = {
     uri      : path,
@@ -5560,6 +5547,7 @@ module.exports = require("path");
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handlePullRequest = void 0;
 const comment = __webpack_require__(965);
 const commit = __webpack_require__(991);
 const compose = __webpack_require__(42);
@@ -5589,6 +5577,7 @@ exports.handlePullRequest = handlePullRequest;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.handleIssueComment = void 0;
 const needle = __webpack_require__(219);
 const config = __webpack_require__(145);
 const commit_status_1 = __webpack_require__(148);
@@ -5615,6 +5604,333 @@ async function handleIssueComment(eventObj) {
 }
 exports.handleIssueComment = handleIssueComment;
 //# sourceMappingURL=issue-comment.js.map
+
+/***/ }),
+
+/***/ 640:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+var Buffer = __webpack_require__(215).Buffer;
+
+// == UTF32-LE/BE codec. ==========================================================
+
+exports._utf32 = Utf32Codec;
+
+function Utf32Codec(codecOptions, iconv) {
+    this.iconv = iconv;
+    this.bomAware = true;
+    this.isLE = codecOptions.isLE;
+}
+
+exports.utf32le = { type: '_utf32', isLE: true };
+exports.utf32be = { type: '_utf32', isLE: false };
+
+// Aliases
+exports.ucs4le = 'utf32le';
+exports.ucs4be = 'utf32be';
+
+Utf32Codec.prototype.encoder = Utf32Encoder;
+Utf32Codec.prototype.decoder = Utf32Decoder;
+
+// -- Encoding
+
+function Utf32Encoder(options, codec) {
+    this.isLE = codec.isLE;
+    this.highSurrogate = 0;
+}
+
+Utf32Encoder.prototype.write = function(str) {
+    var src = Buffer.from(str, 'ucs2');
+    var dst = Buffer.alloc(src.length * 2);
+    var write32 = this.isLE ? dst.writeUInt32LE : dst.writeUInt32BE;
+    var offset = 0;
+
+    for (var i = 0; i < src.length; i += 2) {
+        var code = src.readUInt16LE(i);
+        var isHighSurrogate = (0xD800 <= code && code < 0xDC00);
+        var isLowSurrogate = (0xDC00 <= code && code < 0xE000);
+
+        if (this.highSurrogate) {
+            if (isHighSurrogate || !isLowSurrogate) {
+                // There shouldn't be two high surrogates in a row, nor a high surrogate which isn't followed by a low
+                // surrogate. If this happens, keep the pending high surrogate as a stand-alone semi-invalid character
+                // (technically wrong, but expected by some applications, like Windows file names).
+                write32.call(dst, this.highSurrogate, offset);
+                offset += 4;
+            }
+            else {
+                // Create 32-bit value from high and low surrogates;
+                var codepoint = (((this.highSurrogate - 0xD800) << 10) | (code - 0xDC00)) + 0x10000;
+
+                write32.call(dst, codepoint, offset);
+                offset += 4;
+                this.highSurrogate = 0;
+
+                continue;
+            }
+        }
+
+        if (isHighSurrogate)
+            this.highSurrogate = code;
+        else {
+            // Even if the current character is a low surrogate, with no previous high surrogate, we'll
+            // encode it as a semi-invalid stand-alone character for the same reasons expressed above for
+            // unpaired high surrogates.
+            write32.call(dst, code, offset);
+            offset += 4;
+            this.highSurrogate = 0;
+        }
+    }
+
+    if (offset < dst.length)
+        dst = dst.slice(0, offset);
+
+    return dst;
+};
+
+Utf32Encoder.prototype.end = function() {
+    // Treat any leftover high surrogate as a semi-valid independent character.
+    if (!this.highSurrogate)
+        return;
+
+    var buf = Buffer.alloc(4);
+
+    if (this.isLE)
+        buf.writeUInt32LE(this.highSurrogate, 0);
+    else
+        buf.writeUInt32BE(this.highSurrogate, 0);
+
+    this.highSurrogate = 0;
+
+    return buf;
+};
+
+// -- Decoding
+
+function Utf32Decoder(options, codec) {
+    this.isLE = codec.isLE;
+    this.badChar = codec.iconv.defaultCharUnicode.charCodeAt(0);
+    this.overflow = [];
+}
+
+Utf32Decoder.prototype.write = function(src) {
+    if (src.length === 0)
+        return '';
+
+    var i = 0;
+    var codepoint = 0;
+    var dst = Buffer.alloc(src.length + 4);
+    var offset = 0;
+    var isLE = this.isLE;
+    var overflow = this.overflow;
+    var badChar = this.badChar;
+
+    if (overflow.length > 0) {
+        for (; i < src.length && overflow.length < 4; i++)
+            overflow.push(src[i]);
+        
+        if (overflow.length === 4) {
+            // NOTE: codepoint is a signed int32 and can be negative.
+            // NOTE: We copied this block from below to help V8 optimize it (it works with array, not buffer).
+            if (isLE) {
+                codepoint = overflow[i] | (overflow[i+1] << 8) | (overflow[i+2] << 16) | (overflow[i+3] << 24);
+            } else {
+                codepoint = overflow[i+3] | (overflow[i+2] << 8) | (overflow[i+1] << 16) | (overflow[i] << 24);
+            }
+            overflow.length = 0;
+
+            offset = _writeCodepoint(dst, offset, codepoint, badChar);
+        }
+    }
+
+    // Main loop. Should be as optimized as possible.
+    for (; i < src.length - 3; i += 4) {
+        // NOTE: codepoint is a signed int32 and can be negative.
+        if (isLE) {
+            codepoint = src[i] | (src[i+1] << 8) | (src[i+2] << 16) | (src[i+3] << 24);
+        } else {
+            codepoint = src[i+3] | (src[i+2] << 8) | (src[i+1] << 16) | (src[i] << 24);
+        }
+        offset = _writeCodepoint(dst, offset, codepoint, badChar);
+    }
+
+    // Keep overflowing bytes.
+    for (; i < src.length; i++) {
+        overflow.push(src[i]);
+    }
+
+    return dst.slice(0, offset).toString('ucs2');
+};
+
+function _writeCodepoint(dst, offset, codepoint, badChar) {
+    // NOTE: codepoint is signed int32 and can be negative. We keep it that way to help V8 with optimizations.
+    if (codepoint < 0 || codepoint > 0x10FFFF) {
+        // Not a valid Unicode codepoint
+        codepoint = badChar;
+    } 
+
+    // Ephemeral Planes: Write high surrogate.
+    if (codepoint >= 0x10000) {
+        codepoint -= 0x10000;
+
+        var high = 0xD800 | (codepoint >> 10);
+        dst[offset++] = high & 0xff;
+        dst[offset++] = high >> 8;
+
+        // Low surrogate is written below.
+        var codepoint = 0xDC00 | (codepoint & 0x3FF);
+    }
+
+    // Write BMP char or low surrogate.
+    dst[offset++] = codepoint & 0xff;
+    dst[offset++] = codepoint >> 8;
+
+    return offset;
+};
+
+Utf32Decoder.prototype.end = function() {
+    this.overflow.length = 0;
+};
+
+// == UTF-32 Auto codec =============================================================
+// Decoder chooses automatically from UTF-32LE and UTF-32BE using BOM and space-based heuristic.
+// Defaults to UTF-32LE. http://en.wikipedia.org/wiki/UTF-32
+// Encoder/decoder default can be changed: iconv.decode(buf, 'utf32', {defaultEncoding: 'utf-32be'});
+
+// Encoder prepends BOM (which can be overridden with (addBOM: false}).
+
+exports.utf32 = Utf32AutoCodec;
+exports.ucs4 = 'utf32';
+
+function Utf32AutoCodec(options, iconv) {
+    this.iconv = iconv;
+}
+
+Utf32AutoCodec.prototype.encoder = Utf32AutoEncoder;
+Utf32AutoCodec.prototype.decoder = Utf32AutoDecoder;
+
+// -- Encoding
+
+function Utf32AutoEncoder(options, codec) {
+    options = options || {};
+
+    if (options.addBOM === undefined)
+        options.addBOM = true;
+
+    this.encoder = codec.iconv.getEncoder(options.defaultEncoding || 'utf-32le', options);
+}
+
+Utf32AutoEncoder.prototype.write = function(str) {
+    return this.encoder.write(str);
+};
+
+Utf32AutoEncoder.prototype.end = function() {
+    return this.encoder.end();
+};
+
+// -- Decoding
+
+function Utf32AutoDecoder(options, codec) {
+    this.decoder = null;
+    this.initialBufs = [];
+    this.initialBufsLen = 0;
+    this.options = options || {};
+    this.iconv = codec.iconv;
+}
+
+Utf32AutoDecoder.prototype.write = function(buf) {
+    if (!this.decoder) { 
+        // Codec is not chosen yet. Accumulate initial bytes.
+        this.initialBufs.push(buf);
+        this.initialBufsLen += buf.length;
+
+        if (this.initialBufsLen < 32) // We need more bytes to use space heuristic (see below)
+            return '';
+
+        // We have enough bytes -> detect endianness.
+        var encoding = detectEncoding(this.initialBufs, this.options.defaultEncoding);
+        this.decoder = this.iconv.getDecoder(encoding, this.options);
+
+        var resStr = '';
+        for (var i = 0; i < this.initialBufs.length; i++)
+            resStr += this.decoder.write(this.initialBufs[i]);
+
+        this.initialBufs.length = this.initialBufsLen = 0;
+        return resStr;
+    }
+
+    return this.decoder.write(buf);
+};
+
+Utf32AutoDecoder.prototype.end = function() {
+    if (!this.decoder) {
+        var encoding = detectEncoding(this.initialBufs, this.options.defaultEncoding);
+        this.decoder = this.iconv.getDecoder(encoding, this.options);
+
+        var resStr = '';
+        for (var i = 0; i < this.initialBufs.length; i++)
+            resStr += this.decoder.write(this.initialBufs[i]);
+
+        var trail = this.decoder.end();
+        if (trail)
+            resStr += trail;
+
+        this.initialBufs.length = this.initialBufsLen = 0;
+        return resStr;
+    }
+
+    return this.decoder.end();
+};
+
+function detectEncoding(bufs, defaultEncoding) {
+    var b = [];
+    var charsProcessed = 0;
+    var invalidLE = 0, invalidBE = 0;   // Number of invalid chars when decoded as LE or BE.
+    var bmpCharsLE = 0, bmpCharsBE = 0; // Number of BMP chars when decoded as LE or BE.
+
+    outer_loop:
+    for (var i = 0; i < bufs.length; i++) {
+        var buf = bufs[i];
+        for (var j = 0; j < buf.length; j++) {
+            b.push(buf[j]);
+            if (b.length === 4) {
+                if (charsProcessed === 0) {
+                    // Check BOM first.
+                    if (b[0] === 0xFF && b[1] === 0xFE && b[2] === 0 && b[3] === 0) {
+                        return 'utf-32le';
+                    }
+                    if (b[0] === 0 && b[1] === 0 && b[2] === 0xFE && b[3] === 0xFF) {
+                        return 'utf-32be';
+                    }
+                }
+
+                if (b[0] !== 0 || b[1] > 0x10) invalidBE++;
+                if (b[3] !== 0 || b[2] > 0x10) invalidLE++;
+
+                if (b[0] === 0 && b[1] === 0 && (b[2] !== 0 || b[3] !== 0)) bmpCharsBE++;
+                if ((b[0] !== 0 || b[1] !== 0) && b[2] === 0 && b[3] === 0) bmpCharsLE++;
+
+                b.length = 0;
+                charsProcessed++;
+
+                if (charsProcessed >= 100) {
+                    break outer_loop;
+                }
+            }
+        }
+    }
+
+    // Make decisions.
+    if (bmpCharsBE - invalidBE > bmpCharsLE - invalidLE)  return 'utf-32be';
+    if (bmpCharsBE - invalidBE < bmpCharsLE - invalidLE)  return 'utf-32le';
+
+    // Couldn't decide (likely all zeros or not enough data).
+    return defaultEncoding || 'utf-32le';
+}
+
 
 /***/ }),
 
@@ -7802,7 +8118,7 @@ var y = d * 365.25;
  * @api public
  */
 
-module.exports = function(val, options) {
+module.exports = function (val, options) {
   options = options || {};
   var type = typeof val;
   if (type === 'string' && val.length > 0) {
@@ -7969,6 +8285,11 @@ module.exports = {
     "mik": {
         "type": "_sbcs",
         "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя└┴┬├─┼╣║╚╔╩╦╠═╬┐░▒▓│┤№§╗╝┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+    },
+
+    "cp720": {
+        "type": "_sbcs",
+        "chars": "\x80\x81éâ\x84à\x86çêëèïî\x8d\x8e\x8f\x90\u0651\u0652ô¤ـûùءآأؤ£إئابةتثجحخدذرزسشص«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀ضطظعغفµقكلمنهوىي≡\u064b\u064c\u064d\u064e\u064f\u0650≈°∙·√ⁿ²■\u00a0"
     },
 
     // Aliases of generated encodings.
@@ -8470,6 +8791,7 @@ Utf16BEDecoder.prototype.write = function(buf) {
 }
 
 Utf16BEDecoder.prototype.end = function() {
+    this.overflowByte = -1;
 }
 
 
@@ -8512,8 +8834,8 @@ Utf16Encoder.prototype.end = function() {
 
 function Utf16Decoder(options, codec) {
     this.decoder = null;
-    this.initialBytes = [];
-    this.initialBytesLen = 0;
+    this.initialBufs = [];
+    this.initialBufsLen = 0;
 
     this.options = options || {};
     this.iconv = codec.iconv;
@@ -8522,17 +8844,22 @@ function Utf16Decoder(options, codec) {
 Utf16Decoder.prototype.write = function(buf) {
     if (!this.decoder) {
         // Codec is not chosen yet. Accumulate initial bytes.
-        this.initialBytes.push(buf);
-        this.initialBytesLen += buf.length;
+        this.initialBufs.push(buf);
+        this.initialBufsLen += buf.length;
         
-        if (this.initialBytesLen < 16) // We need more bytes to use space heuristic (see below)
+        if (this.initialBufsLen < 16) // We need more bytes to use space heuristic (see below)
             return '';
 
         // We have enough bytes -> detect endianness.
-        var buf = Buffer.concat(this.initialBytes),
-            encoding = detectEncoding(buf, this.options.defaultEncoding);
+        var encoding = detectEncoding(this.initialBufs, this.options.defaultEncoding);
         this.decoder = this.iconv.getDecoder(encoding, this.options);
-        this.initialBytes.length = this.initialBytesLen = 0;
+
+        var resStr = '';
+        for (var i = 0; i < this.initialBufs.length; i++)
+            resStr += this.decoder.write(this.initialBufs[i]);
+
+        this.initialBufs.length = this.initialBufsLen = 0;
+        return resStr;
     }
 
     return this.decoder.write(buf);
@@ -8540,47 +8867,61 @@ Utf16Decoder.prototype.write = function(buf) {
 
 Utf16Decoder.prototype.end = function() {
     if (!this.decoder) {
-        var buf = Buffer.concat(this.initialBytes),
-            encoding = detectEncoding(buf, this.options.defaultEncoding);
+        var encoding = detectEncoding(this.initialBufs, this.options.defaultEncoding);
         this.decoder = this.iconv.getDecoder(encoding, this.options);
 
-        var res = this.decoder.write(buf),
-            trail = this.decoder.end();
+        var resStr = '';
+        for (var i = 0; i < this.initialBufs.length; i++)
+            resStr += this.decoder.write(this.initialBufs[i]);
 
-        return trail ? (res + trail) : res;
+        var trail = this.decoder.end();
+        if (trail)
+            resStr += trail;
+
+        this.initialBufs.length = this.initialBufsLen = 0;
+        return resStr;
     }
     return this.decoder.end();
 }
 
-function detectEncoding(buf, defaultEncoding) {
-    var enc = defaultEncoding || 'utf-16le';
+function detectEncoding(bufs, defaultEncoding) {
+    var b = [];
+    var charsProcessed = 0;
+    var asciiCharsLE = 0, asciiCharsBE = 0; // Number of ASCII chars when decoded as LE or BE.
 
-    if (buf.length >= 2) {
-        // Check BOM.
-        if (buf[0] == 0xFE && buf[1] == 0xFF) // UTF-16BE BOM
-            enc = 'utf-16be';
-        else if (buf[0] == 0xFF && buf[1] == 0xFE) // UTF-16LE BOM
-            enc = 'utf-16le';
-        else {
-            // No BOM found. Try to deduce encoding from initial content.
-            // Most of the time, the content has ASCII chars (U+00**), but the opposite (U+**00) is uncommon.
-            // So, we count ASCII as if it was LE or BE, and decide from that.
-            var asciiCharsLE = 0, asciiCharsBE = 0, // Counts of chars in both positions
-                _len = Math.min(buf.length - (buf.length % 2), 64); // Len is always even.
+    outer_loop:
+    for (var i = 0; i < bufs.length; i++) {
+        var buf = bufs[i];
+        for (var j = 0; j < buf.length; j++) {
+            b.push(buf[j]);
+            if (b.length === 2) {
+                if (charsProcessed === 0) {
+                    // Check BOM first.
+                    if (b[0] === 0xFF && b[1] === 0xFE) return 'utf-16le';
+                    if (b[0] === 0xFE && b[1] === 0xFF) return 'utf-16be';
+                }
 
-            for (var i = 0; i < _len; i += 2) {
-                if (buf[i] === 0 && buf[i+1] !== 0) asciiCharsBE++;
-                if (buf[i] !== 0 && buf[i+1] === 0) asciiCharsLE++;
+                if (b[0] === 0 && b[1] !== 0) asciiCharsBE++;
+                if (b[0] !== 0 && b[1] === 0) asciiCharsLE++;
+
+                b.length = 0;
+                charsProcessed++;
+
+                if (charsProcessed >= 100) {
+                    break outer_loop;
+                }
             }
-
-            if (asciiCharsBE > asciiCharsLE)
-                enc = 'utf-16be';
-            else if (asciiCharsBE < asciiCharsLE)
-                enc = 'utf-16le';
         }
     }
 
-    return enc;
+    // Make decisions.
+    // Most of the time, the content has ASCII chars (U+00**), but the opposite (U+**00) is uncommon.
+    // So, we count ASCII as if it was LE or BE, and decide from that.
+    if (asciiCharsBE > asciiCharsLE) return 'utf-16be';
+    if (asciiCharsBE < asciiCharsLE) return 'utf-16le';
+
+    // Couldn't decide (likely all zeros or not enough data).
+    return defaultEncoding || 'utf-16le';
 }
 
 
@@ -8591,7 +8932,7 @@ function detectEncoding(buf, defaultEncoding) {
 /***/ 810:
 /***/ (function(module) {
 
-module.exports = [["a140","",62],["a180","",32],["a240","",62],["a280","",32],["a2ab","",5],["a2e3","€"],["a2ef",""],["a2fd",""],["a340","",62],["a380","",31,"　"],["a440","",62],["a480","",32],["a4f4","",10],["a540","",62],["a580","",32],["a5f7","",7],["a640","",62],["a680","",32],["a6b9","",7],["a6d9","",6],["a6ec",""],["a6f3",""],["a6f6","",8],["a740","",62],["a780","",32],["a7c2","",14],["a7f2","",12],["a896","",10],["a8bc",""],["a8bf","ǹ"],["a8c1",""],["a8ea","",20],["a958",""],["a95b",""],["a95d",""],["a989","〾⿰",11],["a997","",12],["a9f0","",14],["aaa1","",93],["aba1","",93],["aca1","",93],["ada1","",93],["aea1","",93],["afa1","",93],["d7fa","",4],["f8a1","",93],["f9a1","",93],["faa1","",93],["fba1","",93],["fca1","",93],["fda1","",93],["fe50","⺁⺄㑳㑇⺈⺋㖞㘚㘎⺌⺗㥮㤘㧏㧟㩳㧐㭎㱮㳠⺧⺪䁖䅟⺮䌷⺳⺶⺷䎱䎬⺻䏝䓖䙡䙌"],["fe80","䜣䜩䝼䞍⻊䥇䥺䥽䦂䦃䦅䦆䦟䦛䦷䦶䲣䲟䲠䲡䱷䲢䴓",6,"䶮",93]];
+module.exports = [["a140","",62],["a180","",32],["a240","",62],["a280","",32],["a2ab","",5],["a2e3","€"],["a2ef",""],["a2fd",""],["a340","",62],["a380","",31,"　"],["a440","",62],["a480","",32],["a4f4","",10],["a540","",62],["a580","",32],["a5f7","",7],["a640","",62],["a680","",32],["a6b9","",7],["a6d9","",6],["a6ec",""],["a6f3",""],["a6f6","",8],["a740","",62],["a780","",32],["a7c2","",14],["a7f2","",12],["a896","",10],["a8bc","ḿ"],["a8bf","ǹ"],["a8c1",""],["a8ea","",20],["a958",""],["a95b",""],["a95d",""],["a989","〾⿰",11],["a997","",12],["a9f0","",14],["aaa1","",93],["aba1","",93],["aca1","",93],["ada1","",93],["aea1","",93],["afa1","",93],["d7fa","",4],["f8a1","",93],["f9a1","",93],["faa1","",93],["fba1","",93],["fca1","",93],["fda1","",93],["fe50","⺁⺄㑳㑇⺈⺋㖞㘚㘎⺌⺗㥮㤘㧏㧟㩳㧐㭎㱮㳠⺧⺪䁖䅟⺮䌷⺳⺶⺷䎱䎬⺻䏝䓖䙡䙌"],["fe80","䜣䜩䝼䞍⻊䥇䥺䥽䦂䦃䦅䦆䦟䦛䦷䦶䲣䲟䲠䲡䱷䲢䴓",6,"䶮",93],["8135f437",""]];
 
 /***/ }),
 
@@ -8807,26 +9148,33 @@ function StreamDecoder(charset) {
 }
 
 StreamDecoder.prototype._transform = function(chunk, encoding, done) {
-  var res, found;
-
-  // try get charset from chunk, just once
-  if (this.charset == 'iso-8859-1' && !this.parsed_chunk) {
+  // try to get charset from chunk, but just once
+  if (!this.parsed_chunk && (this.charset == 'utf-8' || this.charset == 'utf8')) {
     this.parsed_chunk = true;
 
     var matches = regex.exec(chunk.toString());
     if (matches) {
-      found = matches[1].toLowerCase();
-      this.charset = found == 'utf-8' ? 'utf8' : found;
+      var found = matches[1].toLowerCase().replace('utf8', 'utf-8'); // canonicalize;
+      // set charset, but only if iconv can handle it
+      if (iconv.encodingExists(found)) this.charset = found;
     }
   }
 
-  try {
-    res = iconv.decode(chunk, this.charset);
-  } catch(e) { // something went wrong, just return original chunk
-    res = chunk;
+  if (this.charset == 'utf-8') { // no need to decode, just pass through
+    this.push(chunk);
+    return done();
   }
 
-  this.push(res);
+  // initialize stream decoder if not present
+  var self = this;
+  if (!this.decoder) {
+    this.decoder = iconv.decodeStream(this.charset);
+    this.decoder.on('data', function(decoded_chunk) {
+      self.push(decoded_chunk);
+    });
+  };
+
+  this.decoder.write(chunk);
   done();
 }
 
@@ -8866,8 +9214,6 @@ module.exports = require("url");
 "use strict";
 
 
-// Some environments don't have global Buffer (e.g. React Native).
-// Solution would be installing npm modules "buffer" and "stream" explicitly.
 var Buffer = __webpack_require__(215).Buffer;
 
 var bomHandling = __webpack_require__(454),
@@ -8999,19 +9345,48 @@ iconv.getDecoder = function getDecoder(encoding, options) {
     return decoder;
 }
 
+// Streaming API
+// NOTE: Streaming API naturally depends on 'stream' module from Node.js. Unfortunately in browser environments this module can add
+// up to 100Kb to the output bundle. To avoid unnecessary code bloat, we don't enable Streaming API in browser by default.
+// If you would like to enable it explicitly, please add the following code to your app:
+// > iconv.enableStreamingAPI(require('stream'));
+iconv.enableStreamingAPI = function enableStreamingAPI(stream_module) {
+    if (iconv.supportsStreams)
+        return;
 
-// Load extensions in Node. All of them are omitted in Browserify build via 'browser' field in package.json.
-var nodeVer = typeof process !== 'undefined' && process.versions && process.versions.node;
-if (nodeVer) {
+    // Dependency-inject stream module to create IconvLite stream classes.
+    var streams = __webpack_require__(313)(stream_module);
 
-    // Load streaming support in Node v0.10+
-    var nodeVerArr = nodeVer.split(".").map(Number);
-    if (nodeVerArr[0] > 0 || nodeVerArr[1] >= 10) {
-        __webpack_require__(313)(iconv);
+    // Not public API yet, but expose the stream classes.
+    iconv.IconvLiteEncoderStream = streams.IconvLiteEncoderStream;
+    iconv.IconvLiteDecoderStream = streams.IconvLiteDecoderStream;
+
+    // Streaming API.
+    iconv.encodeStream = function encodeStream(encoding, options) {
+        return new iconv.IconvLiteEncoderStream(iconv.getEncoder(encoding, options), options);
     }
 
-    // Load Node primitive extensions.
-    __webpack_require__(329)(iconv);
+    iconv.decodeStream = function decodeStream(encoding, options) {
+        return new iconv.IconvLiteDecoderStream(iconv.getDecoder(encoding, options), options);
+    }
+
+    iconv.supportsStreams = true;
+}
+
+// Enable Streaming API automatically if 'stream' module is available and non-empty (the majority of environments).
+var stream_module;
+try {
+    stream_module = __webpack_require__(413);
+} catch (e) {}
+
+if (stream_module && stream_module.Transform) {
+    iconv.enableStreamingAPI(stream_module);
+
+} else {
+    // In rare cases where 'stream' module is not available by default, throw a helpful exception.
+    iconv.encodeStream = iconv.decodeStream = function() {
+        throw new Error("iconv-lite Streaming API is not enabled. Use iconv.enableStreamingAPI(require('stream')); to enable it.");
+    };
 }
 
 if (false) {}
@@ -9328,6 +9703,7 @@ module.exports = [["8740","䏰䰲䘃䖦䕸𧉧䵷䖳𧲱䳢𧳅㮕䜶䝄䱇䱀�
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteExistingComments = exports.postComment = void 0;
 const needle = __webpack_require__(219);
 const config = __webpack_require__(145);
 const options = {
@@ -9551,6 +9927,7 @@ exports.fork = fork;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getCommits = void 0;
 const child_process_promise_1 = __webpack_require__(330);
 const config = __webpack_require__(145);
 async function getCommits() {

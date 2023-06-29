@@ -18,13 +18,13 @@
   "homepage": "https://github.com/snyk/release-notes-preview#readme",
   "dependencies": {
     "child-process-promise": "^2.2.1",
-    "needle": "^2.4.0"
+    "needle": "^3.2.0"
   },
   "devDependencies": {
-    "@zeit/ncc": "^0.20.5",
     "@types/child-process-promise": "^2.2.1",
-    "@types/needle": "^2.0.4",
+    "@types/needle": "^3.2.0",
     "@types/node": "^13.9.1",
+    "@zeit/ncc": "^0.20.5",
     "typescript": "^3.8.3"
   }
 }
